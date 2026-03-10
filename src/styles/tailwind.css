@@ -1,0 +1,200 @@
+/* stylelint-disable at-rule-no-unknown */
+/* ...existing code... */
+@import url('https://fonts.googleapis.com/css2?family=Crimson+Text:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Karla:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Primary Colors */
+    --color-primary: #D8A7B1; /* dusty rose */
+    --color-primary-foreground: #2E1F27; /* deep plum text */
+    
+    /* Secondary Colors */
+    --color-secondary: #C9B6A9; /* warm taupe */
+    --color-secondary-foreground: #2E1F27;
+    
+    /* Accent Colors */
+    --color-accent: #B87491; /* mauve accent */
+    --color-accent-foreground: #FDF7F5; /* light */
+    
+    /* Background Colors */
+    --color-background: #FFF8F5; /* blush off-white */
+    --color-foreground: #2E1F27; /* deep plum */
+    
+    /* Surface Colors */
+    --color-card: #F7EFEC; /* soft shell */
+    --color-card-foreground: #2E1F27;
+    
+    --color-popover: #F7EFEC;
+    --color-popover-foreground: #2E1F27;
+    
+    /* Muted Colors */
+    --color-muted: #F0E4E1; /* pale mauve */
+    --color-muted-foreground: #6C4B57; /* muted plum */
+    
+    /* Border & Input */
+    --color-border: rgba(184, 116, 145, 0.25); /* mauve-tinted */
+    --color-input: #F7EFEC;
+    --color-ring: #D8A7B1;
+    
+    /* Status Colors */
+    --color-success: #8BA89E; /* soft sage to balance rose */
+    --color-success-foreground: #123026;
+    
+    --color-warning: #E4B88F; /* warm amber */
+    --color-warning-foreground: #2E1F27;
+    
+    --color-error: #C97B83; /* deeper dusty rose-red */
+    --color-error-foreground: #2E1F27;
+    
+    --color-destructive: #C97B83;
+    --color-destructive-foreground: #2E1F27;
+    
+    /* Radius */
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --radius-xl: 24px;
+  }
+
+  .dark {
+    /* Primary Colors */
+    --color-primary: #C07C8A; /* deeper dusty rose */
+    --color-primary-foreground: #FDF7F5;
+    
+    /* Secondary Colors */
+    --color-secondary: #A88E86; /* muted cocoa */
+    --color-secondary-foreground: #FDF7F5;
+    
+    /* Accent Colors */
+    --color-accent: #9C5C78; /* plum accent */
+    --color-accent-foreground: #FDF7F5;
+    
+    /* Background Colors */
+    --color-background: #1E1418; /* deep plum night */
+    --color-foreground: rgba(255, 240, 243, 0.9); /* soft blush light */
+    
+    /* Surface Colors */
+    --color-card: #271920; /* elevated plum */
+    --color-card-foreground: rgba(255, 240, 243, 0.9);
+    
+    --color-popover: #2F1F27;
+    --color-popover-foreground: rgba(255, 240, 243, 0.9);
+    
+    /* Muted Colors */
+    --color-muted: #2C1D24;
+    --color-muted-foreground: rgba(221, 185, 194, 0.75);
+    
+    /* Border & Input */
+    --color-border: rgba(192, 124, 138, 0.3);
+    --color-input: #2C1D24;
+    --color-ring: #C07C8A;
+    
+    /* Status Colors */
+    --color-success: #77A18F; /* sage for contrast */
+    --color-success-foreground: #0E1B15;
+    
+    --color-warning: #D7A46E;
+    --color-warning-foreground: #1E1418;
+    
+    --color-error: #B65F6C;
+    --color-error-foreground: #FDF7F5;
+    
+    --color-destructive: #B65F6C;
+    --color-destructive-foreground: #FDF7F5;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 16px;
+    line-height: 1.7;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Crimson Text', serif;
+  }
+
+  h1 {
+    font-size: 2.25rem;
+    line-height: 1.3;
+  }
+
+  h2 {
+    font-size: 1.875rem;
+    line-height: 1.35;
+  }
+
+  h3 {
+    font-size: 1.5rem;
+    line-height: 1.4;
+  }
+
+  h4 {
+    font-size: 1.25rem;
+    line-height: 1.45;
+  }
+
+  h5 {
+    font-size: 1.125rem;
+    line-height: 1.5;
+  }
+
+  .caption {
+    font-family: 'Karla', sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    letter-spacing: 0.025em;
+  }
+
+  .data-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-feature-settings: 'tnum' on, 'lnum' on;
+  }
+
+  @media (max-width: 768px) {
+    body {
+      font-size: 15px;
+    }
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .smooth-scroll {
+    scroll-behavior: smooth;
+  }
+
+  .transition-gentle {
+    transition: all 250ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  .shadow-gentle-sm {
+    box-shadow: 0 1px 3px rgba(45, 58, 46, 0.08);
+  }
+
+  .shadow-gentle {
+    box-shadow: 0 3px 6px rgba(45, 58, 46, 0.1);
+  }
+
+  .shadow-gentle-md {
+    box-shadow: 0 6px 12px rgba(45, 58, 46, 0.12);
+  }
+
+  .shadow-gentle-lg {
+    box-shadow: 0 10px 25px -5px rgba(45, 58, 46, 0.15);
+  }
+}
