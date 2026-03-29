@@ -18,6 +18,9 @@ const PersonalizedDashboard = () => {
   const personalityType = currentUser?.personalityType || currentUser?.predictedPersonality || "Ambivert";
   const personalityMeta = PERSONALITY_META[personalityType];
   const healthyTips = getHealthyTips(personalityType);
+  const isIntrovert = personalityType === "Introvert";
+  const sudokuRequired = isIntrovert && !currentUser?.sudokuCompleted;
+  const canOpenChats = !isIntrovert || currentUser?.sudokuCompleted;
 
   const availableMatches = useMemo(() => {
     return users
@@ -25,8 +28,6 @@ const PersonalizedDashboard = () => {
       .map((user) => ({ user, match: buildMatchSummary(currentUser, user) }))
       .filter(({ match }) => match.samePersonality && match.sharedInterests.length > 0).length;
   }, [users, currentUser]);
-
-  const canOpenChats = personalityType !== "Introvert" || currentUser?.sudokuCompleted;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-secondary/10">
@@ -78,22 +79,40 @@ const PersonalizedDashboard = () => {
               <p className="text-sm text-muted-foreground mt-2">
                 You can retake the 5-question personality test anytime.
               </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                iconName="ClipboardList"
+                className="mt-4"
+                onClick={() => navigate("/adaptive-quiz")}
+              >
+                Retake test
+              </Button>
             </div>
 
             <div className="rounded-3xl bg-background/70 border border-border p-5">
               <p className="text-sm text-muted-foreground mb-2">Sudoku status</p>
               <p className="text-xl font-semibold text-foreground">
-                {personalityType === "Introvert"
+                {isIntrovert
                   ? currentUser?.sudokuCompleted
-                    ? "Unlocked"
-                    : "Pending"
-                  : "Optional"}
+                    ? "Required step completed"
+                    : "Required before chat"
+                  : "Optional activity"}
               </p>
               <p className="text-sm text-muted-foreground mt-2">
-                {personalityType === "Introvert"
-                  ? "Introverts complete Sudoku before matching and chat."
-                  : "You can play Sudoku anytime as an optional feature."}
+                {isIntrovert
+                  ? "Introverts complete Sudoku before matching and chat open."
+                  : "Ambiverts and extroverts can play Sudoku anytime without blocking matches or chat."}
               </p>
+              <Button
+                variant={isIntrovert && !currentUser?.sudokuCompleted ? "default" : "outline"}
+                size="sm"
+                iconName="Grid3X3"
+                className="mt-4"
+                onClick={() => navigate("/sudoku-puzzle")}
+              >
+                {isIntrovert && !currentUser?.sudokuCompleted ? "Open required Sudoku" : "Play Sudoku"}
+              </Button>
             </div>
           </div>
         </section>
@@ -124,7 +143,7 @@ const PersonalizedDashboard = () => {
               </h2>
             </div>
 
-            {personalityType === "Introvert" && !currentUser?.sudokuCompleted ? (
+            {sudokuRequired ? (
               <div className="rounded-3xl border border-primary/20 bg-primary/5 p-5">
                 <p className="text-lg font-semibold text-foreground">Complete the Sudoku challenge</p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
@@ -141,9 +160,13 @@ const PersonalizedDashboard = () => {
               </div>
             ) : (
               <div className="rounded-3xl border border-border bg-gradient-to-br from-primary/10 via-secondary/10 to-accent/10 p-5">
-                <p className="text-lg font-semibold text-foreground">Matching and chat are ready</p>
+                <p className="text-lg font-semibold text-foreground">
+                  {isIntrovert ? "Matching and chat are ready" : "Your feed is ready, and Sudoku stays optional"}
+                </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                  Explore people who share your personality type and interests, then start the kind of conversation your profile allows.
+                  {isIntrovert
+                    ? "Explore people who share your personality type and interests, then start the kind of conversation your profile allows."
+                    : "You can jump into matching and chat now, or open Sudoku any time when you want a calm side activity."}
                 </p>
                 <div className="mt-5 flex flex-col sm:flex-row gap-3">
                   <Button
@@ -154,7 +177,12 @@ const PersonalizedDashboard = () => {
                   >
                     Open Matches & Chat
                   </Button>
-                  <Button variant="outline" iconName="Settings" onClick={() => navigate("/settings")}>
+                  {!isIntrovert && (
+                    <Button variant="outline" iconName="Grid3X3" onClick={() => navigate("/sudoku-puzzle")}>
+                      Play optional Sudoku
+                    </Button>
+                  )}
+                  <Button variant="ghost" iconName="Settings" onClick={() => navigate("/settings")}>
                     Open Settings
                   </Button>
                 </div>

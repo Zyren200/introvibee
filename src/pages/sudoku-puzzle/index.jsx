@@ -5,7 +5,6 @@ import NavigationBreadcrumb from "../../components/ui/NavigationBreadcrumb";
 import Button from "../../components/ui/Button";
 import Icon from "../../components/AppIcon";
 import { useIntroVibeAuth } from "../../introVibeAuth";
-import { getPostAuthRoute } from "../../utils/introVibe";
 import {
   getStoredSessionToken,
   isApiOnlyMode,
@@ -73,10 +72,11 @@ const SudokuPuzzle = () => {
   const [completed, setCompleted] = useState(Boolean(currentUser?.sudokuCompleted));
   const [isCompleting, setIsCompleting] = useState(false);
   const [isLoadingProgress, setIsLoadingProgress] = useState(true);
-  const [storageMode, setStorageMode] = useState('legacy-local');
+  const [storageMode, setStorageMode] = useState("legacy-local");
   const lastRemoteBoardRef = useRef(JSON.stringify(cloneBoard(puzzle)));
 
   const isIntrovert = currentUser?.personalityType === "Introvert";
+  const continueRoute = "/find-matches-conversations";
 
   useEffect(() => {
     if (!authReady) {
@@ -91,23 +91,23 @@ const SudokuPuzzle = () => {
 
       if (shouldUseRemoteSudoku(authMode, currentUser?.id)) {
         try {
-          const payload = await requestIntroVibeApi('/api/sudoku/progress');
+          const payload = await requestIntroVibeApi("/api/sudoku/progress");
           if (cancelled) return;
 
           const nextBoard = Array.isArray(payload?.progress?.boardState)
             ? payload.progress.boardState.map((row) => [...row])
             : cloneBoard(puzzle);
           setBoard(nextBoard);
-          setCompleted(Boolean(currentUser?.sudokuCompleted || payload?.progress?.status === 'completed'));
+          setCompleted(Boolean(currentUser?.sudokuCompleted || payload?.progress?.status === "completed"));
           lastRemoteBoardRef.current = JSON.stringify(nextBoard);
-          setStorageMode('railway-api');
+          setStorageMode("railway-api");
           setIsLoadingProgress(false);
           return;
         } catch (error) {
           if (!shouldFallbackToLegacySudoku(error)) {
             if (!cancelled) {
-              setFeedback(error.message || 'Unable to load your Sudoku progress right now.');
-              setStorageMode('railway-api');
+              setFeedback(error.message || "Unable to load your Sudoku progress right now.");
+              setStorageMode("railway-api");
               setIsLoadingProgress(false);
             }
             return;
@@ -118,7 +118,7 @@ const SudokuPuzzle = () => {
       if (!cancelled) {
         setBoard(getInitialBoard(currentUser?.id));
         setCompleted(Boolean(currentUser?.sudokuCompleted));
-        setStorageMode('legacy-local');
+        setStorageMode("legacy-local");
         setIsLoadingProgress(false);
       }
     };
@@ -135,7 +135,7 @@ const SudokuPuzzle = () => {
   useEffect(() => {
     if (!currentUser?.id || isLoadingProgress) return undefined;
 
-    if (storageMode === 'legacy-local') {
+    if (storageMode === "legacy-local") {
       try {
         const raw = localStorage.getItem(SUDOKU_PROGRESS_KEY);
         const parsed = raw ? JSON.parse(raw) : {};
@@ -147,12 +147,12 @@ const SudokuPuzzle = () => {
           })
         );
       } catch (error) {
-        console.error('Failed to save Sudoku progress', error);
+        console.error("Failed to save Sudoku progress", error);
       }
       return undefined;
     }
 
-    if (storageMode !== 'railway-api' || completed || currentUser?.sudokuCompleted) {
+    if (storageMode !== "railway-api" || completed || currentUser?.sudokuCompleted) {
       return undefined;
     }
 
@@ -162,18 +162,18 @@ const SudokuPuzzle = () => {
 
     const timer = setTimeout(async () => {
       try {
-        await requestIntroVibeApi('/api/sudoku/progress', {
-          method: 'PUT',
+        await requestIntroVibeApi("/api/sudoku/progress", {
+          method: "PUT",
           body: JSON.stringify({ boardState: board }),
         });
         lastRemoteBoardRef.current = boardSnapshot;
       } catch (error) {
         if (shouldFallbackToLegacySudoku(error)) {
-          setStorageMode('legacy-local');
+          setStorageMode("legacy-local");
           return;
         }
 
-        setFeedback(error.message || 'Unable to save your Sudoku draft right now.');
+        setFeedback(error.message || "Unable to save your Sudoku draft right now.");
       }
     }, 250);
 
@@ -237,21 +237,21 @@ const SudokuPuzzle = () => {
     setIsCompleting(true);
     setFeedback("");
 
-    if (storageMode === 'railway-api' && lastRemoteBoardRef.current !== boardSnapshot) {
+    if (storageMode === "railway-api" && lastRemoteBoardRef.current !== boardSnapshot) {
       try {
-        await requestIntroVibeApi('/api/sudoku/progress', {
-          method: 'PUT',
+        await requestIntroVibeApi("/api/sudoku/progress", {
+          method: "PUT",
           body: JSON.stringify({ boardState: board }),
         });
         lastRemoteBoardRef.current = boardSnapshot;
       } catch (error) {
         if (!shouldFallbackToLegacySudoku(error)) {
           setIsCompleting(false);
-          setFeedback(error.message || 'We could not save your Sudoku progress right now.');
+          setFeedback(error.message || "We could not save your Sudoku progress right now.");
           return;
         }
 
-        setStorageMode('legacy-local');
+        setStorageMode("legacy-local");
       }
     }
 
@@ -264,13 +264,12 @@ const SudokuPuzzle = () => {
     }
 
     setCompleted(true);
-    setFeedback("Sudoku complete. Matching and chat are now unlocked.");
+    setFeedback(
+      isIntrovert
+        ? "Sudoku complete. Matching and chat are now unlocked."
+        : "Sudoku complete. Nice work. You can jump back into matching and chat anytime."
+    );
   };
-
-  const nextRoute = getPostAuthRoute({
-    ...currentUser,
-    sudokuCompleted: completed || currentUser?.sudokuCompleted,
-  });
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-secondary/10">
@@ -291,7 +290,7 @@ const SudokuPuzzle = () => {
                 <p className="text-muted-foreground mt-3 max-w-2xl leading-relaxed">
                   {isIntrovert
                     ? "Complete this puzzle to unlock matching and chat. It is your calm gateway into IntroVibe."
-                    : "Sudoku is optional for you, but it is here when you want a calm challenge before chatting."}
+                    : "Sudoku is optional for you. Play it whenever you want a calm challenge before or after chatting."}
                 </p>
               </div>
               <div className="text-right">
@@ -362,14 +361,23 @@ const SudokuPuzzle = () => {
                 Why this is here
               </h2>
               <div className="space-y-3 text-sm text-muted-foreground leading-relaxed">
-                <p>IntroVibe uses Sudoku as a focused checkpoint for introverts before opening the social layer.</p>
-                <p>It gives you one quiet win first, then moves you into matching and chat when you feel settled.</p>
+                {isIntrovert ? (
+                  <>
+                    <p>IntroVibe uses Sudoku as a focused checkpoint for introverts before opening the social layer.</p>
+                    <p>It gives you one quiet win first, then moves you into matching and chat when you feel settled.</p>
+                  </>
+                ) : (
+                  <>
+                    <p>Sudoku is completely optional for ambiverts and extroverts, so your social tools stay open even if you skip it.</p>
+                    <p>It is here as a calm side activity whenever you want a quick brain break before returning to your inbox.</p>
+                  </>
+                )}
               </div>
             </div>
 
             <div className="bg-card border border-border rounded-3xl p-6 shadow-gentle">
               <h2 className="text-2xl font-heading font-semibold text-foreground mb-4">
-                What unlocks next
+                {isIntrovert ? "What unlocks next" : "What you can do next"}
               </h2>
               <div className="space-y-3">
                 <div className="flex items-start gap-3">
@@ -378,7 +386,9 @@ const SudokuPuzzle = () => {
                 </div>
                 <div className="flex items-start gap-3">
                   <Icon name="MessageCircle" size={18} color="var(--color-secondary)" />
-                  <p className="text-sm text-muted-foreground">1-on-1 chat access after completion</p>
+                  <p className="text-sm text-muted-foreground">
+                    {isIntrovert ? "1-on-1 chat access after completion" : "Keep chatting right away, or come back to Sudoku later"}
+                  </p>
                 </div>
                 <div className="flex items-start gap-3">
                   <Icon name="HeartPulse" size={18} color="var(--color-accent)" />
@@ -393,11 +403,18 @@ const SudokuPuzzle = () => {
                   Ready to continue?
                 </h2>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Your next step is unlocked. You can move into the main IntroVibe experience now.
+                  {isIntrovert
+                    ? "Your required puzzle step is finished. Move into matching and chat whenever you are ready."
+                    : "You can head back to your matches and chats now, and Sudoku will stay here whenever you want it."}
                 </p>
-                <Button variant="default" iconName="ArrowRight" onClick={() => navigate(nextRoute)}>
-                  Continue to IntroVibe
-                </Button>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button variant="default" iconName="ArrowRight" onClick={() => navigate(continueRoute)}>
+                    Open Matches & Chat
+                  </Button>
+                  <Button variant="outline" iconName="LayoutDashboard" onClick={() => navigate("/personalized-dashboard")}>
+                    Back to dashboard
+                  </Button>
+                </div>
               </div>
             )}
           </section>
