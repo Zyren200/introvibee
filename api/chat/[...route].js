@@ -11,6 +11,16 @@ const {
 } = require("../_lib/chat");
 
 const getChatRoute = (req) => {
+  const routeParam = req?.query?.route;
+
+  if (Array.isArray(routeParam)) {
+    return routeParam.filter(Boolean).join("/");
+  }
+
+  if (typeof routeParam === "string" && routeParam.trim()) {
+    return routeParam.trim();
+  }
+
   const pathname = new URL(req.url || "/", "http://localhost").pathname.replace(/\/+$/, "");
   return pathname
     .split("/")

@@ -5,6 +5,16 @@ const { getSudokuProgressForUser, saveSudokuProgressForUser } = require("../_lib
 const { getUserById, listUsers, runQuery } = require("../_lib/users");
 
 const getSudokuRoute = (req) => {
+  const routeParam = req?.query?.route;
+
+  if (Array.isArray(routeParam)) {
+    return routeParam.filter(Boolean).join("/");
+  }
+
+  if (typeof routeParam === "string" && routeParam.trim()) {
+    return routeParam.trim();
+  }
+
   const pathname = new URL(req.url || "/", "http://localhost").pathname.replace(/\/+$/, "");
   return pathname
     .split("/")

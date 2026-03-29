@@ -6,6 +6,16 @@ const { createHttpError, ensureMethod, handleApiError, parseJsonBody, sendJson }
 const { getUserById, listUsers, runQuery, syncUserInterests } = require("../_lib/users");
 
 const getAuthRoute = (req) => {
+  const routeParam = req?.query?.route;
+
+  if (Array.isArray(routeParam)) {
+    return routeParam.filter(Boolean).join("/");
+  }
+
+  if (typeof routeParam === "string" && routeParam.trim()) {
+    return routeParam.trim();
+  }
+
   const pathname = new URL(req.url || "/", "http://localhost").pathname.replace(/\/+$/, "");
   return pathname
     .split("/")

@@ -2,8 +2,9 @@ body {
   margin: 0;
   padding: 0;
   font-family: 'Source Sans 3', sans-serif;
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  transition: background-color 250ms ease, color 250ms ease;
 }
 
 * {

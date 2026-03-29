@@ -40,6 +40,7 @@ const defaultAvatar = (seed) =>
 
 const NO_MATCH_STATUS_MESSAGE =
   "Can't find a match right now. IntroVibe only shows people with the same personality type and shared interests.";
+const REMOTE_CHAT_REFRESH_MS = 5000;
 
 const formatSyncTime = (timestamp) => {
   if (!timestamp) return "";
@@ -70,6 +71,7 @@ const FindMatchesConversations = () => {
   const [selectedGroupMembers, setSelectedGroupMembers] = useState([]);
   const [chatMode, setChatMode] = useState('legacy-local');
   const [isLoadingChats, setIsLoadingChats] = useState(true);
+  const [isRefreshingChats, setIsRefreshingChats] = useState(false);
   const [remoteMatchResults, setRemoteMatchResults] = useState([]);
   const [matchesMode, setMatchesMode] = useState("legacy-local");
   const [isLoadingMatches, setIsLoadingMatches] = useState(true);
@@ -463,6 +465,84 @@ const FindMatchesConversations = () => {
     setStatusMessage('Switched to local chat fallback while the API is unavailable.');
   };
 
+  const handleRefreshChats = async ({ silent = false } = {}) => {
+    if (!shouldUseRemoteChat(authMode, currentUser?.id)) {
+      return { success: false, mode: chatMode };
+    }
+
+    if (!silent) {
+      setIsRefreshingChats(true);
+    }
+
+    try {
+      const payload = await fetchRemoteChatState();
+      applyRemoteChatState(payload);
+      return { success: true, mode: 'railway-api' };
+    } catch (error) {
+      if (!shouldFallbackToLegacyChat(error)) {
+        if (!silent) {
+          setStatusMessage(error.message || 'Unable to refresh your chats right now.');
+        }
+
+        return { success: false, error: error.message };
+      }
+
+      fallbackToLegacyChat();
+      return { success: false, fallback: true };
+    } finally {
+      if (!silent) {
+        setIsRefreshingChats(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (!authReady || !shouldUseRemoteChat(authMode, currentUser?.id)) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const syncChats = async () => {
+      try {
+        const payload = await fetchRemoteChatState();
+        if (cancelled) return;
+        applyRemoteChatState(payload);
+      } catch (error) {
+        if (cancelled) return;
+        if (shouldFallbackToLegacyChat(error)) {
+          fallbackToLegacyChat();
+        }
+      }
+    };
+
+    void syncChats();
+
+    const interval = setInterval(() => {
+      void syncChats();
+    }, REMOTE_CHAT_REFRESH_MS);
+
+    const handleFocus = () => {
+      void syncChats();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void syncChats();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [authMode, authReady, currentUser?.id]);
+
   const handleStartDirectChat = async (peerId) => {
     setActiveTab('messages');
     setSelectedChat({ type: 'direct', id: peerId });
@@ -755,9 +835,10 @@ const FindMatchesConversations = () => {
     ? isUserOnline(selectedDirectPeer)
     : false;
   const suggestedStarter = matchResults[0] || null;
+  const chatSyncLabel = chatMode === "railway-api" ? "Live chat sync is on" : "Local chat fallback is active";
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.08),transparent_28%),linear-gradient(180deg,var(--color-background),color-mix(in_oklab,var(--color-background)_92%,var(--color-secondary)_8%))]">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,color-mix(in_oklab,var(--color-primary)_14%,transparent),transparent_32%),linear-gradient(180deg,var(--color-background),color-mix(in_oklab,var(--color-background)_88%,var(--color-secondary)_12%))]">
       <Header />
       <NavigationBreadcrumb />
       <main className="mx-auto max-w-[1500px] px-4 py-6 md:px-6 md:py-8 lg:px-8">
@@ -816,7 +897,7 @@ const FindMatchesConversations = () => {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-[2rem] border border-border/70 bg-card/95 shadow-[0_28px_80px_rgba(15,23,42,0.12)] backdrop-blur">
+        <div className="overflow-hidden rounded-[2rem] border border-border/70 bg-card/95 shadow-[0_28px_80px_rgba(86,54,63,0.18)] backdrop-blur">
           <div className="grid min-h-[76vh] grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px]">
           <section className={`${activeTab === "messages" ? "hidden xl:block" : "block"} order-2 border-t border-border bg-background/80 px-5 py-5 xl:border-l xl:border-t-0`}>
             <div className="space-y-5">
@@ -926,20 +1007,34 @@ const FindMatchesConversations = () => {
 
           <section className={`${activeTab === "matches" ? "hidden xl:block" : "block"} order-1 xl:min-h-[76vh]`}>
             <div className="grid h-full grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)]">
-              <div className="border-b border-border bg-muted/25 p-5 xl:border-b-0 xl:border-r">
+              <div className="border-b border-border bg-muted/20 p-5 xl:border-b-0 xl:border-r">
                 <div className="mb-5">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Inbox</p>
                       <h2 className="mt-1 text-2xl font-heading font-semibold text-foreground">Chats</h2>
                     </div>
-                    <div className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                      {totalThreadCount}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        iconName="RefreshCw"
+                        onClick={() => handleRefreshChats()}
+                        loading={isRefreshingChats}
+                        disabled={isLoadingChats}
+                        className="rounded-full"
+                      >
+                        Refresh
+                      </Button>
+                      <div className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                        {totalThreadCount}
+                      </div>
                     </div>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-2">
+                  <p className="mt-2 text-sm text-muted-foreground">
                     1-on-1 for all. Group chat is {groupChatEnabled ? "enabled" : "disabled"} for your profile.
                   </p>
+                  <p className="mt-1 text-xs text-muted-foreground">{chatSyncLabel}</p>
                 </div>
 
                 {isLoadingChats ? (
@@ -1003,16 +1098,16 @@ const FindMatchesConversations = () => {
                 )}
               </div>
 
-              <div className="flex min-h-[40rem] flex-col bg-[linear-gradient(180deg,rgba(255,255,255,0.76),rgba(248,250,252,0.96))]">
+              <div className="flex min-h-[40rem] flex-col bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-card)_96%,var(--color-primary)_4%),color-mix(in_oklab,var(--color-card)_90%,var(--color-background)_10%))]">
                 {statusMessage && (
-                  <div className="border-b border-border bg-primary/5 px-5 py-3">
+                  <div className="border-b border-border bg-primary/10 px-5 py-3">
                     <p className="text-sm text-foreground">{statusMessage}</p>
                   </div>
                 )}
 
                 {selectedChat ? (
                   <>
-                    <div className="flex items-center justify-between gap-4 border-b border-border bg-card/90 px-5 py-4 backdrop-blur">
+                    <div className="flex items-center justify-between gap-4 border-b border-border bg-card/88 px-5 py-4 backdrop-blur">
                       <div className="min-w-0 flex items-center gap-3">
                         <div className="relative flex-shrink-0">
                           <img
@@ -1048,7 +1143,7 @@ const FindMatchesConversations = () => {
                       </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.06),transparent_35%),linear-gradient(180deg,rgba(248,250,252,0.8),rgba(255,255,255,0.98))] px-4 py-6 md:px-6">
+                    <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,color-mix(in_oklab,var(--color-primary)_12%,transparent),transparent_32%),linear-gradient(180deg,color-mix(in_oklab,var(--color-background)_78%,var(--color-card)_22%),color-mix(in_oklab,var(--color-card)_92%,var(--color-muted)_8%))] px-4 py-6 md:px-6">
                       <div className="mx-auto max-w-3xl">
                         {selectedMessages.length > 0 ? (
                           selectedMessages.map((message) => {
@@ -1157,3 +1252,5 @@ const FindMatchesConversations = () => {
 };
 
 export default FindMatchesConversations;
+
+

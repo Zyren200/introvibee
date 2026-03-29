@@ -3,13 +3,12 @@ import Icon from '../../../components/AppIcon';
 import Image from '../../../components/AppImage';
 
 const MessageBubble = ({ message, isOwn }) => {
-  const formatTime = (date) => {
-    return new Date(date)?.toLocaleTimeString('en-US', {
+  const formatTime = (date) =>
+    new Date(date)?.toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
-      hour12: true
+      hour12: true,
     });
-  };
 
   return (
     <div className={`mb-4 flex items-end gap-3 ${isOwn ? 'flex-row-reverse' : ''}`}>
@@ -18,16 +17,17 @@ const MessageBubble = ({ message, isOwn }) => {
           <Image
             src={message?.avatar}
             alt={message?.avatarAlt}
-            className="w-full h-full object-cover"
+            className="h-full w-full object-cover"
           />
         </div>
       )}
+
       <div className={`max-w-[86%] md:max-w-[72%] ${isOwn ? 'ml-auto flex flex-col items-end' : ''}`}>
         <div
-          className={`rounded-[1.45rem] px-4 py-3 shadow-sm ${
+          className={`rounded-[1.45rem] px-4 py-3 shadow-gentle-sm ${
             isOwn
-              ? 'bg-primary text-primary-foreground rounded-br-md'
-              : 'border border-border/80 bg-background rounded-bl-md text-foreground'
+              ? 'rounded-br-md bg-primary text-primary-foreground'
+              : 'rounded-bl-md border border-border/80 bg-card/95 text-foreground backdrop-blur'
           }`}
         >
           {message?.senderName && !isOwn && (
@@ -35,16 +35,17 @@ const MessageBubble = ({ message, isOwn }) => {
               {message?.senderName}
             </p>
           )}
+
           {message?.isPromptUsed && (
             <div
               className={`mb-2 flex items-center space-x-2 border-b pb-2 ${
                 isOwn ? 'border-primary-foreground/20' : 'border-border'
               }`}
             >
-              <Icon 
-                name="Lightbulb" 
-                size={14} 
-                color={isOwn ? 'var(--color-primary-foreground)' : 'var(--color-accent)'} 
+              <Icon
+                name="Lightbulb"
+                size={14}
+                color={isOwn ? 'var(--color-primary-foreground)' : 'var(--color-accent)'}
               />
               <span className={`caption ${isOwn ? 'text-primary-foreground/80' : 'text-accent'}`}>
                 Used ice breaker
@@ -57,6 +58,7 @@ const MessageBubble = ({ message, isOwn }) => {
               {message?.content}
             </p>
           )}
+
           {message?.imageData && (
             <div className="mt-3">
               <img
@@ -69,9 +71,7 @@ const MessageBubble = ({ message, isOwn }) => {
         </div>
 
         <div className={`mt-1.5 flex items-center gap-2 ${isOwn ? 'flex-row-reverse' : ''}`}>
-          <span className="text-xs text-muted-foreground">
-            {formatTime(message?.timestamp)}
-          </span>
+          <span className="text-xs text-muted-foreground">{formatTime(message?.timestamp)}</span>
           {isOwn && message?.isRead && (
             <div className="flex items-center space-x-1">
               <Icon name="CheckCheck" size={14} color="var(--color-success)" />

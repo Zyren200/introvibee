@@ -17,23 +17,23 @@ const ConversationThread = ({ conversation, onSelect, isActive }) => {
   return (
     <button
       onClick={() => onSelect(conversation?.id)}
-      className={`group w-full text-left rounded-2xl border px-3 py-3 transition-gentle ${
+      className={`group w-full rounded-[1.35rem] border px-3 py-3 text-left transition-gentle ${
         isActive
-          ? 'border-primary/40 bg-primary/10 shadow-gentle-sm'
-          : 'border-transparent hover:border-border hover:bg-background/90'
+          ? 'border-primary/35 bg-primary/12 shadow-gentle-sm'
+          : 'border-transparent bg-card/45 hover:border-border hover:bg-card/80'
       }`}
     >
       <div className="flex items-center gap-3">
         <div className="relative flex-shrink-0">
-          <div className="h-12 w-12 rounded-full overflow-hidden ring-1 ring-border">
+          <div className="h-12 w-12 overflow-hidden rounded-full ring-1 ring-border">
             <Image
               src={conversation?.avatar}
               alt={conversation?.avatarAlt}
-              className="w-full h-full object-cover"
+              className="h-full w-full object-cover"
             />
           </div>
           {conversation?.isOnline && (
-            <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-card bg-success"></div>
+            <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-card bg-success" />
           )}
           {conversation?.unreadCount > 0 && (
             <div className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1">
@@ -44,7 +44,7 @@ const ConversationThread = ({ conversation, onSelect, isActive }) => {
           )}
         </div>
 
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-start justify-between gap-2">
             <h4 className="truncate text-sm font-semibold text-foreground md:text-[15px]">
               {conversation?.name}
@@ -65,18 +65,11 @@ const ConversationThread = ({ conversation, onSelect, isActive }) => {
           </p>
 
           <div className="mt-2 flex items-center gap-2 text-xs">
-            {conversation?.status && conversation?.status !== 'active' ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-1 text-warning">
-                <Icon name="AlertCircle" size={12} color="currentColor" />
-                {conversation?.status}
-              </span>
-            ) : (
-              <span className="rounded-full bg-muted px-2 py-1 text-muted-foreground">
-                {conversation?.status === 'group' ? 'Group' : 'Direct'}
-              </span>
-            )}
+            <span className="rounded-full bg-muted px-2 py-1 text-muted-foreground">
+              {conversation?.status === 'group' ? 'Group' : 'Direct'}
+            </span>
             {conversation?.isDraft && (
-              <span className="rounded-full bg-accent/10 px-2 py-1 text-accent">
+              <span className="rounded-full bg-accent/15 px-2 py-1 text-accent">
                 Draft
               </span>
             )}

@@ -11,44 +11,43 @@
 
 @layer base {
   :root {
-    --color-primary: #2563eb;
-    --color-primary-foreground: #eff6ff;
+    --color-primary: #b76e79;
+    --color-primary-foreground: #fff7f7;
 
-    --color-secondary: #14b8a6;
-    --color-secondary-foreground: #042f2e;
+    --color-secondary: #8ea68c;
+    --color-secondary-foreground: #132017;
 
-    --color-accent: #f97316;
-    --color-accent-foreground: #fff7ed;
+    --color-accent: #d4a373;
+    --color-accent-foreground: #fff8f2;
 
-    --color-background: #f8fafc;
-    --color-foreground: #0f172a;
+    --color-background: #fbf3f1;
+    --color-foreground: #3f2b31;
 
-    --color-card: #ffffff;
-    --color-card-foreground: #0f172a;
+    --color-card: #fffaf8;
+    --color-card-foreground: #3f2b31;
 
-    --color-popover: #ffffff;
-    --color-popover-foreground: #0f172a;
+    --color-popover: #fffaf8;
+    --color-popover-foreground: #3f2b31;
 
-    --color-muted: #e2e8f0;
-    --color-muted-foreground: #64748b;
+    --color-muted: #f1e2df;
+    --color-muted-foreground: #7f656c;
 
-    --color-border: rgba(37, 99, 235, 0.12);
-    --color-input: #ffffff;
-    --color-ring: #2563eb;
+    --color-border: rgba(183, 110, 121, 0.16);
+    --color-input: #fffdfc;
+    --color-ring: #b76e79;
 
-    --color-success: #10b981;
-    --color-success-foreground: #ecfdf5;
+    --color-success: #7ea489;
+    --color-success-foreground: #f4fbf5;
 
-    --color-warning: #f59e0b;
-    --color-warning-foreground: #1f2937;
+    --color-warning: #c9995c;
+    --color-warning-foreground: #fffaf2;
 
-    --color-error: #ef4444;
-    --color-error-foreground: #fef2f2;
+    --color-error: #c7747f;
+    --color-error-foreground: #fff5f6;
 
-    --color-destructive: #ef4444;
-    --color-destructive-foreground: #fef2f2;
+    --color-destructive: #c7747f;
+    --color-destructive-foreground: #fff5f6;
     
-    /* Radius */
     --radius-sm: 6px;
     --radius-md: 12px;
     --radius-lg: 18px;
@@ -56,42 +55,42 @@
   }
 
   .dark {
-    --color-primary: #60a5fa;
-    --color-primary-foreground: #08111f;
+    --color-primary: #e5a7b0;
+    --color-primary-foreground: #301b21;
 
-    --color-secondary: #2dd4bf;
-    --color-secondary-foreground: #052624;
+    --color-secondary: #abc2a3;
+    --color-secondary-foreground: #172116;
 
-    --color-accent: #fb923c;
-    --color-accent-foreground: #1c1005;
+    --color-accent: #e0b58d;
+    --color-accent-foreground: #26160d;
 
-    --color-background: #0f172a;
-    --color-foreground: rgba(248, 250, 252, 0.92);
+    --color-background: #21181d;
+    --color-foreground: rgba(249, 236, 239, 0.94);
 
-    --color-card: #111c31;
-    --color-card-foreground: rgba(248, 250, 252, 0.92);
+    --color-card: #2b1f25;
+    --color-card-foreground: rgba(249, 236, 239, 0.94);
 
-    --color-popover: #111c31;
-    --color-popover-foreground: rgba(248, 250, 252, 0.92);
+    --color-popover: #2b1f25;
+    --color-popover-foreground: rgba(249, 236, 239, 0.94);
 
-    --color-muted: #1e293b;
-    --color-muted-foreground: rgba(148, 163, 184, 0.92);
+    --color-muted: #3a2b33;
+    --color-muted-foreground: rgba(215, 191, 197, 0.88);
 
-    --color-border: rgba(96, 165, 250, 0.2);
-    --color-input: #172033;
-    --color-ring: #60a5fa;
+    --color-border: rgba(229, 167, 176, 0.18);
+    --color-input: #33252d;
+    --color-ring: #e5a7b0;
 
-    --color-success: #34d399;
-    --color-success-foreground: #052e22;
+    --color-success: #92baa0;
+    --color-success-foreground: #132019;
 
-    --color-warning: #fbbf24;
-    --color-warning-foreground: #271804;
+    --color-warning: #e2b579;
+    --color-warning-foreground: #2d1c0a;
 
-    --color-error: #f87171;
-    --color-error-foreground: #2a1012;
+    --color-error: #e28d98;
+    --color-error-foreground: #32181c;
 
-    --color-destructive: #f87171;
-    --color-destructive-foreground: #2a1012;
+    --color-destructive: #e28d98;
+    --color-destructive-foreground: #32181c;
   }
 
   * {
@@ -167,18 +166,18 @@
   }
 
   .shadow-gentle-sm {
-    box-shadow: 0 1px 3px rgba(45, 58, 46, 0.08);
+    box-shadow: 0 8px 20px rgba(106, 68, 76, 0.08);
   }
 
   .shadow-gentle {
-    box-shadow: 0 3px 6px rgba(45, 58, 46, 0.1);
+    box-shadow: 0 14px 30px rgba(106, 68, 76, 0.1);
   }
 
   .shadow-gentle-md {
-    box-shadow: 0 6px 12px rgba(45, 58, 46, 0.12);
+    box-shadow: 0 18px 38px rgba(106, 68, 76, 0.12);
   }
 
   .shadow-gentle-lg {
-    box-shadow: 0 10px 25px -5px rgba(45, 58, 46, 0.15);
+    box-shadow: 0 26px 54px rgba(106, 68, 76, 0.15);
   }
 }
