@@ -892,13 +892,16 @@ const FindMatchesConversations = () => {
   const showMobileInbox = activeTab === "messages" && !selectedChat;
   const showMobileConversation = activeTab === "messages" && Boolean(selectedChat);
   const showMobileMatches = activeTab === "matches";
+  const showCompactMessageLayout = activeTab === "messages";
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,color-mix(in_oklab,var(--color-primary)_14%,transparent),transparent_30%),linear-gradient(180deg,var(--color-background),color-mix(in_oklab,var(--color-background)_88%,var(--color-secondary)_12%))]">
       <Header />
-      <NavigationBreadcrumb />
+      <div className={showCompactMessageLayout ? "hidden xl:block" : ""}>
+        <NavigationBreadcrumb />
+      </div>
       <main className="mx-auto max-w-[1560px] px-4 py-6 md:px-6 md:py-8 lg:px-8">
-        <section className="mb-6 rounded-[2rem] border border-border/70 bg-card/90 p-5 shadow-gentle-sm backdrop-blur md:p-6">
+        <section className={`mb-6 rounded-[2rem] border border-border/70 bg-card/90 p-5 shadow-gentle-sm backdrop-blur md:p-6 ${showCompactMessageLayout ? "hidden xl:block" : ""}`}>
           <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-3xl">
               <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
@@ -938,12 +941,12 @@ const FindMatchesConversations = () => {
         </section>
 
         {statusMessage && (
-          <div className="mb-4 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3">
+          <div className={`mb-4 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3 ${showCompactMessageLayout ? "hidden xl:block" : ""}`}>
             <p className="text-sm text-foreground">{statusMessage}</p>
           </div>
         )}
 
-        <div className="mb-4 lg:hidden">
+        <div className={`mb-4 xl:hidden ${showCompactMessageLayout ? "hidden" : ""}`}>
           <div className="flex gap-2 rounded-full border border-border bg-card/80 p-1 shadow-gentle-sm">
             <button
               onClick={() => setActiveTab("matches")}
@@ -968,7 +971,234 @@ const FindMatchesConversations = () => {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-[2rem] border border-border/70 bg-card/95 shadow-[0_28px_80px_rgba(86,54,63,0.18)] backdrop-blur">
+        {showCompactMessageLayout && (
+          <div className="mb-4 xl:hidden">
+            <div className="overflow-hidden rounded-[2rem] border border-border/70 bg-card/95 shadow-[0_28px_80px_rgba(86,54,63,0.18)] backdrop-blur">
+              {!selectedChat ? (
+                <div className="flex min-h-[72svh] flex-col">
+                  <div className="border-b border-border bg-[radial-gradient(circle_at_top,color-mix(in_oklab,var(--color-primary)_15%,transparent),transparent_40%),linear-gradient(180deg,color-mix(in_oklab,var(--color-card)_95%,var(--color-background)_5%),var(--color-card))] px-4 pb-4 pt-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Mobile message interface</p>
+                        <h2 className="mt-1 text-3xl font-heading font-semibold text-foreground">Inbox</h2>
+                        <p className="mt-2 text-sm text-muted-foreground">{chatSyncLabel}</p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        iconName="RefreshCw"
+                        onClick={() => handleRefreshChats()}
+                        loading={isRefreshingChats}
+                        disabled={isLoadingChats}
+                        className="rounded-full"
+                      >
+                        Refresh
+                      </Button>
+                    </div>
+
+                    <div className="mt-4 flex gap-2 rounded-full border border-border bg-background/70 p-1 shadow-gentle-sm">
+                      <button
+                        onClick={() => setActiveTab("matches")}
+                        className="flex-1 rounded-full px-4 py-2.5 font-medium text-foreground transition-gentle hover:bg-background"
+                      >
+                        Matches
+                      </button>
+                      <button
+                        onClick={() => setActiveTab("messages")}
+                        className="flex-1 rounded-full bg-primary px-4 py-2.5 font-medium text-primary-foreground shadow-gentle-sm transition-gentle"
+                      >
+                        Inbox
+                      </button>
+                    </div>
+
+                    <div className="mt-4 rounded-[1.5rem] border border-border bg-background/82 px-4 py-3">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Icon name="Search" size={16} color="currentColor" />
+                        <input
+                          type="text"
+                          value={conversationQuery}
+                          onChange={(event) => setConversationQuery(event.target.value)}
+                          placeholder="Search chats"
+                          className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {statusMessage && (
+                    <div className="border-b border-border/70 bg-primary/10 px-4 py-3">
+                      <p className="text-sm text-foreground">{statusMessage}</p>
+                    </div>
+                  )}
+
+                  <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+                    {suggestedStarter && (
+                      <div className="rounded-[1.6rem] border border-primary/15 bg-primary/8 p-4 shadow-gentle-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.16em] text-primary/80">Suggested chat</p>
+                            <h3 className="mt-1 text-lg font-semibold text-foreground">{suggestedStarter.name}</h3>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              Start with a shared-interest conversation and keep the same IntroVibe look.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleStartDirectChat(suggestedStarter.id)}
+                            className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-gentle-sm transition-gentle hover:bg-primary/90"
+                          >
+                            Chat
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {isLoadingChats ? (
+                      <div className="rounded-[1.6rem] border border-border bg-background/75 p-4">
+                        <p className="text-sm text-muted-foreground">Loading your chat history...</p>
+                      </div>
+                    ) : filteredInboxThreads.length > 0 ? (
+                      <div className="space-y-2">
+                        {filteredInboxThreads.map((thread) => (
+                          <ConversationThread
+                            key={`${thread.status}-${thread.id}`}
+                            conversation={thread}
+                            onSelect={() => handleSelectInboxThread(thread)}
+                            isActive={selectedChat?.type === thread.status && selectedChat?.id === thread.id}
+                          />
+                        ))}
+                      </div>
+                    ) : totalThreadCount > 0 ? (
+                      <div className="rounded-[1.6rem] border border-dashed border-border bg-background/80 p-4 text-sm text-muted-foreground">
+                        No conversations match your search yet.
+                      </div>
+                    ) : (
+                      <div className="rounded-[1.8rem] border border-dashed border-border bg-background/80 p-5 text-center">
+                        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+                          <Icon name="MessagesSquare" size={24} color="var(--color-primary)" />
+                        </div>
+                        <p className="text-base font-semibold text-foreground">No conversations yet</p>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          Start with a match and your mobile inbox will appear here.
+                        </p>
+                        <Button
+                          variant="default"
+                          iconName="Search"
+                          className="mt-4 rounded-full"
+                          onClick={handleFindMatchesAction}
+                        >
+                          Find matches
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex min-h-[78svh] flex-col bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-card)_96%,var(--color-primary)_4%),color-mix(in_oklab,var(--color-card)_90%,var(--color-background)_10%))]">
+                  <div className="border-b border-border bg-card/92 px-4 py-4 backdrop-blur">
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedChat(null)}
+                        className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background/75 text-foreground transition-gentle hover:bg-muted"
+                        aria-label="Back to inbox"
+                      >
+                        <Icon name="ChevronLeft" size={18} color="currentColor" />
+                      </button>
+
+                      <div className="relative flex-shrink-0">
+                        <img
+                          src={selectedChatAvatar}
+                          alt={`${selectedChatName || "Chat"} avatar`}
+                          className="h-11 w-11 rounded-full object-cover ring-1 ring-border"
+                        />
+                        {selectedChatOnline && (
+                          <span className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-2 border-card bg-success" />
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                          {selectedChat?.type === "direct" ? "Direct conversation" : "Group conversation"}
+                        </p>
+                        <h3 className="truncate text-lg font-semibold text-foreground">
+                          {selectedChat?.type === "direct" ? selectedChatName : `# ${selectedChatName}`}
+                        </h3>
+                        <p className="truncate text-sm text-muted-foreground">
+                          {selectedChatOnline ? "Active now" : selectedChatSubtitle}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("matches")}
+                        className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground transition-gentle hover:bg-muted"
+                      >
+                        Matches
+                      </button>
+                    </div>
+
+                    {statusMessage && (
+                      <div className="mt-3 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-3">
+                        <p className="text-sm text-foreground">{statusMessage}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,color-mix(in_oklab,var(--color-primary)_12%,transparent),transparent_32%),linear-gradient(180deg,color-mix(in_oklab,var(--color-background)_78%,var(--color-card)_22%),color-mix(in_oklab,var(--color-card)_92%,var(--color-muted)_8%))] px-4 py-5">
+                    <div className="mx-auto max-w-3xl">
+                      {selectedMessages.length > 0 ? (
+                        selectedMessages.map((message) => {
+                          const sender =
+                            users.find((user) => user.id === message.senderId) || selectedDirectPeer;
+
+                          return (
+                            <MessageBubble
+                              key={message.id}
+                              message={{
+                                ...message,
+                                senderName:
+                                  selectedChat.type === "group" && message.senderId !== currentUser?.id
+                                    ? sender?.username
+                                    : null,
+                                avatar: defaultAvatar(sender?.username || selectedGroup?.name),
+                                avatarAlt: `${sender?.username || selectedGroup?.name} avatar`,
+                                isRead: false,
+                              }}
+                              isOwn={message.senderId === currentUser?.id}
+                            />
+                          );
+                        })
+                      ) : (
+                        <div className="flex min-h-[42svh] items-center justify-center">
+                          <div className="max-w-md rounded-[2rem] border border-dashed border-border bg-card/80 px-6 py-8 text-center shadow-gentle-sm">
+                            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+                              <Icon name="MessageCircleMore" size={24} color="var(--color-primary)" />
+                            </div>
+                            <p className="text-base font-semibold text-foreground">No messages yet</p>
+                            <p className="mt-2 text-sm text-muted-foreground">
+                              Start the conversation whenever you are ready.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <MessageComposer
+                    compact
+                    recipientName={selectedChat.type === "direct" ? selectedDirectPeer?.username : `# ${selectedGroup?.name}`}
+                    onSend={handleSendMessage}
+                    onSaveDraft={(value) => setStatusMessage(`Draft saved (${value.length} characters).`)}
+                    onReplyLater={() => setStatusMessage("Saved for later.")}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className={`overflow-hidden rounded-[2rem] border border-border/70 bg-card/95 shadow-[0_28px_80px_rgba(86,54,63,0.18)] backdrop-blur ${showCompactMessageLayout ? "hidden xl:block" : ""}`}>
           <div className="grid min-h-[78vh] grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)_360px]">
             <aside className={`${showMobileInbox ? "block" : "hidden"} border-b border-border bg-muted/20 xl:block xl:border-b-0 xl:border-r`}>
               <div className="flex h-full flex-col p-5">
