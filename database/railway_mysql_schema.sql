@@ -269,6 +269,20 @@ CREATE TABLE IF NOT EXISTS direct_message_reads (
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS direct_conversation_clears (
+  conversation_id CHAR(36) NOT NULL,
+  user_id CHAR(36) NOT NULL,
+  cleared_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (conversation_id, user_id),
+  KEY idx_direct_conversation_clears_user (user_id),
+  CONSTRAINT fk_direct_conversation_clears_conversation
+    FOREIGN KEY (conversation_id) REFERENCES direct_conversations (id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_direct_conversation_clears_user
+    FOREIGN KEY (user_id) REFERENCES users (id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS group_chats (
   id CHAR(36) NOT NULL,
   name VARCHAR(120) NOT NULL,
@@ -331,6 +345,20 @@ CREATE TABLE IF NOT EXISTS group_message_reads (
     FOREIGN KEY (message_id) REFERENCES group_messages (id)
     ON DELETE CASCADE,
   CONSTRAINT fk_group_message_reads_user
+    FOREIGN KEY (user_id) REFERENCES users (id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS group_chat_clears (
+  group_chat_id CHAR(36) NOT NULL,
+  user_id CHAR(36) NOT NULL,
+  cleared_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (group_chat_id, user_id),
+  KEY idx_group_chat_clears_user (user_id),
+  CONSTRAINT fk_group_chat_clears_group
+    FOREIGN KEY (group_chat_id) REFERENCES group_chats (id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_group_chat_clears_user
     FOREIGN KEY (user_id) REFERENCES users (id)
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

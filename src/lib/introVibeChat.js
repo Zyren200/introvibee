@@ -73,6 +73,12 @@ export const markRemoteDirectRead = async (peerId) =>
     body: JSON.stringify({ action: "read", peerId }),
   });
 
+export const deleteRemoteDirectConversation = async (peerId) =>
+  requestIntroVibeApi("/api/chat/direct", {
+    method: "POST",
+    body: JSON.stringify({ action: "delete", peerId }),
+  });
+
 export const createRemoteGroup = async (name, memberIds) =>
   requestIntroVibeApi("/api/chat/groups", {
     method: "POST",
@@ -93,4 +99,10 @@ export const markRemoteGroupRead = async (groupId) =>
   requestIntroVibeApi("/api/chat/groups", {
     method: "POST",
     body: JSON.stringify({ action: "read", groupId }),
+  });
+
+export const deleteRemoteGroupConversation = async (groupId) =>
+  requestIntroVibeApi("/api/chat/groups", {
+    method: "POST",
+    body: JSON.stringify({ action: "delete", groupId }),
   });

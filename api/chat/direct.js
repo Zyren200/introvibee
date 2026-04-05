@@ -1,7 +1,7 @@
 const { withTransaction } = require("../_lib/db");
 const { requireSession } = require("../_lib/auth");
 const { createHttpError, ensureMethod, handleApiError, parseJsonBody, sendJson } = require("../_lib/http");
-const { markDirectConversationRead, sendDirectMessage } = require("../_lib/chat");
+const { deleteDirectConversationForUser, markDirectConversationRead, sendDirectMessage } = require("../_lib/chat");
 
 module.exports = async (req, res) => {
   if (!ensureMethod(req, res, ["POST"])) {
@@ -21,6 +21,10 @@ module.exports = async (req, res) => {
 
       if (action === "read") {
         return markDirectConversationRead(session.user.id, body?.peerId, connection);
+      }
+
+      if (action === "delete") {
+        return deleteDirectConversationForUser(session.user.id, body?.peerId, connection);
       }
 
       throw createHttpError("Unsupported direct chat action.", 400);

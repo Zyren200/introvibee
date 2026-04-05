@@ -11,87 +11,68 @@ const createInClause = (values = []) => values.map(() => "?").join(", ");
 
 const toTimestamp = (value) => (value ? new Date(value).getTime() : Date.now());
 const MESSAGE_CONTENT_VERSION = "introVibe:message:v1";
+let clearTablesReadyPromise = null;
+let clearTablesEnabled = null;
 
-const parseStoredMessageContent = (value) => {
-  const rawValue = typeof value === "string" ? value : "";
-  if (!rawValue) {
-    return {
-      content: "",
-      replyToMessageId: null,
-    };
+const ensureConversationClearTables = async () => {
+  if (clearTablesEnabled !== null) {
+    return clearTablesEnabled;
   }
 
-  try {
-    const parsed = JSON.parse(rawValue);
-    if (parsed?.__introVibeMessage !== MESSAGE_CONTENT_VERSION) {
-      throw new Error("Not an IntroVibe message envelope.");
-    }
+  if (!clearTablesReadyPromise) {
+    clearTablesReadyPromise = (async () => {
+      try {
+        await runQuery(
+          query,
+          `CREATE TABLE IF NOT EXISTS direct_conversation_clears (
+             conversation_id CHAR(36) NOT NULL,
+             user_id CHAR(36) NOT NULL,
+             cleared_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+             PRIMARY KEY (conversation_id, user_id),
+             KEY idx_direct_conversation_clears_user (user_id),
+             CONSTRAINT fk_direct_conversation_clears_conversation
+               FOREIGN KEY (conversation_id) REFERENCES direct_conversations (id)
+               ON DELETE CASCADE,
+             CONSTRAINT fk_direct_conversation_clears_user
+               FOREIGN KEY (user_id) REFERENCES users (id)
+               ON DELETE CASCADE
+           ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+        );
+        await runQuery(
+          query,
+          `CREATE TABLE IF NOT EXISTS group_chat_clears (
+             group_chat_id CHAR(36) NOT NULL,
+             user_id CHAR(36) NOT NULL,
+             cleared_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+             PRIMARY KEY (group_chat_id, user_id),
+             KEY idx_group_chat_clears_user (user_id),
+             CONSTRAINT fk_group_chat_clears_group
+               FOREIGN KEY (group_chat_id) REFERENCES group_chats (id)
+               ON DELETE CASCADE,
+             CONSTRAINT fk_group_chat_clears_user
+               FOREIGN KEY (user_id) REFERENCES users (id)
+               ON DELETE CASCADE
+           ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+        );
+        clearTablesEnabled = true;
+      } catch (error) {
+        clearTablesEnabled = false;
+      } finally {
+        clearTablesReadyPromise = null;
+      }
 
-    return {
-      content: typeof parsed?.text === "string" ? parsed.text : "",
-      replyToMessageId:
-        typeof parsed?.replyToMessageId === "string" && parsed.replyToMessageId.trim()
-          ? parsed.replyToMessageId.trim()
-          : null,
-    };
-  } catch (error) {
-    return {
-      content: rawValue,
-      replyToMessageId: null,
-    };
+      return clearTablesEnabled;
+    })();
   }
+
+  return clearTablesReadyPromise;
 };
 
-const serializeStoredMessageContent = (payload = {}) => {
-  const content = (payload?.text || "").toString().trim();
-  const replyToMessageId =
-    typeof payload?.replyToMessageId === "string" && payload.replyToMessageId.trim()
-      ? payload.replyToMessageId.trim()
-      : null;
-
-  if (!replyToMessageId) {
-    return {
-      content,
-      replyToMessageId: null,
-      storedContent: content,
-    };
-  }
-
-  return {
-    content,
-    replyToMessageId,
-    storedContent: JSON.stringify({
-      __introVibeMessage: MESSAGE_CONTENT_VERSION,
-      text: content,
-      replyToMessageId,
-    }),
-  };
-};
-
-const mapMessages = (messageRows, readRows) => {
-  const readByMessage = readRows.reduce((accumulator, row) => {
-    if (!accumulator[row.message_id]) {
-      accumulator[row.message_id] = [];
-    }
-
-    accumulator[row.message_id].push(row.user_id);
+const mapClearRowsByConversation = (rows = [], idKey) =>
+  rows.reduce((accumulator, row) => {
+    accumulator[row[idKey]] = toTimestamp(row.cleared_at);
     return accumulator;
   }, {});
-
-  return messageRows.map((row) => {
-    const normalizedContent = parseStoredMessageContent(row.content);
-
-    return {
-      id: row.id,
-      senderId: row.sender_id,
-      content: normalizedContent.content,
-      imageData: row.image_url || null,
-      timestamp: toTimestamp(row.created_at),
-      readBy: Array.from(new Set([row.sender_id, ...(readByMessage[row.id] || [])])),
-      replyToMessageId: normalizedContent.replyToMessageId,
-    };
-  });
-};
 
 const listDirectChatsForUser = async (userId, executor = query) => {
   const conversationRows = await runQuery(
@@ -107,7 +88,18 @@ const listDirectChatsForUser = async (userId, executor = query) => {
     return {};
   }
 
+  const clearTablesEnabled = await ensureConversationClearTables();
   const conversationIds = conversationRows.map((row) => row.id);
+  const clearRows = clearTablesEnabled
+    ? await runQuery(
+        executor,
+        `SELECT conversation_id, cleared_at
+         FROM direct_conversation_clears
+         WHERE user_id = ?
+           AND conversation_id IN (${createInClause(conversationIds)})`,
+        [userId, ...conversationIds]
+      )
+    : [];
   const messageRows = await runQuery(
     executor,
     `SELECT id, conversation_id, sender_id, content, image_url, created_at
@@ -138,8 +130,15 @@ const listDirectChatsForUser = async (userId, executor = query) => {
     return accumulator;
   }, {});
 
+  const clearedAtByConversation = mapClearRowsByConversation(clearRows, "conversation_id");
+
   return Object.fromEntries(
-    conversationRows.map((row) => [
+    conversationRows
+      .filter((row) => {
+        const clearedAt = clearedAtByConversation[row.id] || 0;
+        return !clearedAt || toTimestamp(row.last_message_at || row.updated_at) > clearedAt;
+      })
+      .map((row) => [
       row.conversation_key,
       {
         id: row.id,
@@ -167,7 +166,18 @@ const listGroupChatsForUser = async (userId, executor = query) => {
     return [];
   }
 
+  const clearTablesEnabled = await ensureConversationClearTables();
   const groupIds = groupRows.map((row) => row.id);
+  const clearRows = clearTablesEnabled
+    ? await runQuery(
+        executor,
+        `SELECT group_chat_id, cleared_at
+         FROM group_chat_clears
+         WHERE user_id = ?
+           AND group_chat_id IN (${createInClause(groupIds)})`,
+        [userId, ...groupIds]
+      )
+    : [];
   const memberRows = await runQuery(
     executor,
     `SELECT group_chat_id, user_id
@@ -215,7 +225,14 @@ const listGroupChatsForUser = async (userId, executor = query) => {
     return accumulator;
   }, {});
 
-  return groupRows.map((row) => ({
+  const clearedAtByGroup = mapClearRowsByConversation(clearRows, "group_chat_id");
+
+  return groupRows
+    .filter((row) => {
+      const clearedAt = clearedAtByGroup[row.id] || 0;
+      return !clearedAt || toTimestamp(row.last_message_at || row.updated_at) > clearedAt;
+    })
+    .map((row) => ({
     id: row.id,
     name: row.name,
     createdBy: row.created_by,
@@ -226,6 +243,7 @@ const listGroupChatsForUser = async (userId, executor = query) => {
 };
 
 const getChatStateForUser = async (userId, executor = query) => {
+  await ensureConversationClearTables();
   const [directChats, groupChats] = await Promise.all([
     listDirectChatsForUser(userId, executor),
     listGroupChatsForUser(userId, executor),
@@ -328,6 +346,7 @@ const ensureReplyTarget = async ({
 };
 
 const sendDirectMessage = async (senderId, peerId, payload, executor = query) => {
+  const clearTablesEnabled = await ensureConversationClearTables();
   const conversation = await ensureDirectConversation(senderId, peerId, executor);
   const { content, replyToMessageId, storedContent } = serializeStoredMessageContent(payload);
   const imageData = payload?.imageData || null;
@@ -372,6 +391,16 @@ const sendDirectMessage = async (senderId, peerId, payload, executor = query) =>
      WHERE id = ?`,
     [conversation.id]
   );
+
+  if (clearTablesEnabled) {
+    await runQuery(
+      executor,
+      `DELETE FROM direct_conversation_clears
+       WHERE conversation_id = ?
+         AND user_id IN (?, ?)`,
+      [conversation.id, conversation.user_one_id, conversation.user_two_id]
+    );
+  }
 
   await markMatchMessaged(senderId, peerId, executor);
   return getChatStateForUser(senderId, executor);
@@ -506,6 +535,7 @@ const createGroupChat = async (creatorUser, name, memberIds, executor = query) =
 };
 
 const sendGroupMessage = async (userId, groupId, payload, executor = query) => {
+  const clearTablesEnabled = await ensureConversationClearTables();
   const membershipRows = await runQuery(
     executor,
     `SELECT group_chat_id
@@ -564,6 +594,25 @@ const sendGroupMessage = async (userId, groupId, payload, executor = query) => {
     [groupId]
   );
 
+  const memberRows = await runQuery(
+    executor,
+    `SELECT user_id
+     FROM group_chat_members
+     WHERE group_chat_id = ?`,
+    [groupId]
+  );
+  const memberIds = memberRows.map((row) => row.user_id);
+
+  if (clearTablesEnabled && memberIds.length) {
+    await runQuery(
+      executor,
+      `DELETE FROM group_chat_clears
+       WHERE group_chat_id = ?
+         AND user_id IN (${createInClause(memberIds)})`,
+      [groupId, ...memberIds]
+    );
+  }
+
   return getChatStateForUser(userId, executor);
 };
 
@@ -610,8 +659,77 @@ const markGroupChatRead = async (userId, groupId, executor = query) => {
   return getChatStateForUser(userId, executor);
 };
 
+const deleteDirectConversationForUser = async (userId, peerId, executor = query) => {
+  const clearTablesEnabled = await ensureConversationClearTables();
+  if (!clearTablesEnabled) {
+    throw createHttpError("Conversation delete is unavailable right now.", 503);
+  }
+
+  if (!peerId || peerId === userId) {
+    throw createHttpError("Choose a valid match for direct chat.", 400);
+  }
+
+  const participants = [userId, peerId].sort();
+  const conversationKey = participants.join(":");
+  const rows = await runQuery(
+    executor,
+    `SELECT id
+     FROM direct_conversations
+     WHERE conversation_key = ?
+     LIMIT 1`,
+    [conversationKey]
+  );
+
+  if (!rows.length) {
+    return getChatStateForUser(userId, executor);
+  }
+
+  await runQuery(
+    executor,
+    `INSERT INTO direct_conversation_clears (conversation_id, user_id, cleared_at)
+     VALUES (?, ?, CURRENT_TIMESTAMP)
+     ON DUPLICATE KEY UPDATE cleared_at = CURRENT_TIMESTAMP`,
+    [rows[0].id, userId]
+  );
+
+  return getChatStateForUser(userId, executor);
+};
+
+const deleteGroupConversationForUser = async (userId, groupId, executor = query) => {
+  const clearTablesEnabled = await ensureConversationClearTables();
+  if (!clearTablesEnabled) {
+    throw createHttpError("Conversation delete is unavailable right now.", 503);
+  }
+
+  const membershipRows = await runQuery(
+    executor,
+    `SELECT group_chat_id
+     FROM group_chat_members
+     WHERE group_chat_id = ?
+       AND user_id = ?
+     LIMIT 1`,
+    [groupId, userId]
+  );
+
+  if (!membershipRows.length) {
+    throw createHttpError("You are not a member of that group chat.", 403);
+  }
+
+  await runQuery(
+    executor,
+    `INSERT INTO group_chat_clears (group_chat_id, user_id, cleared_at)
+     VALUES (?, ?, CURRENT_TIMESTAMP)
+     ON DUPLICATE KEY UPDATE cleared_at = CURRENT_TIMESTAMP`,
+    [groupId, userId]
+  );
+
+  return getChatStateForUser(userId, executor);
+};
+
 module.exports = {
   createGroupChat,
+  deleteDirectConversationForUser,
+  deleteGroupConversationForUser,
   getChatStateForUser,
   markDirectConversationRead,
   markGroupChatRead,

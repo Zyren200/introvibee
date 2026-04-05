@@ -11,6 +11,8 @@ import EmptyState from "./components/EmptyState";
 import { useIntroVibeAuth } from "../../introVibeAuth";
 import {
   createRemoteGroup,
+  deleteRemoteDirectConversation,
+  deleteRemoteGroupConversation,
   fetchRemoteChatState,
   getDirectChatKey,
   loadLegacyDirectChats,
@@ -67,6 +69,35 @@ const formatSyncTime = (timestamp) => {
   });
 };
 
+const getConversationClearTimestamp = (conversation, userId) => {
+  if (!conversation || !userId) {
+    return 0;
+  }
+
+  const rawValue = conversation?.clearedAtBy?.[userId];
+  return typeof rawValue === "number" ? rawValue : Number(rawValue) || 0;
+};
+
+const isConversationHiddenForUser = (conversation, userId) => {
+  const clearedAt = getConversationClearTimestamp(conversation, userId);
+  if (!clearedAt) {
+    return false;
+  }
+
+  const lastUpdated = Number(conversation?.lastUpdated || 0);
+  return !lastUpdated || clearedAt >= lastUpdated;
+};
+
+const restoreConversationVisibility = (clearedAtBy, userIds = []) => {
+  const nextValue = { ...(clearedAtBy || {}) };
+
+  userIds.filter(Boolean).forEach((userId) => {
+    delete nextValue[userId];
+  });
+
+  return nextValue;
+};
+
 const FindMatchesConversations = () => {
   const {
     currentUser,
@@ -97,6 +128,8 @@ const FindMatchesConversations = () => {
   const [replyTargetId, setReplyTargetId] = useState(null);
   const [isGroupComposerOpen, setIsGroupComposerOpen] = useState(false);
   const [groupMemberQuery, setGroupMemberQuery] = useState("");
+  const [conversationPendingDelete, setConversationPendingDelete] = useState(null);
+  const [isDeletingConversation, setIsDeletingConversation] = useState(false);
 
   const personalityType = currentUser?.personalityType;
   const personalityMeta = PERSONALITY_META[personalityType];
@@ -290,7 +323,12 @@ const FindMatchesConversations = () => {
           const conversation = directChats[key];
           const messages = conversation?.messages || [];
 
-          if (messages.length === 0) return null;
+          if (
+            messages.length === 0 ||
+            isConversationHiddenForUser(conversation, currentUser?.id)
+          ) {
+            return null;
+          }
 
           const lastMessage = messages[messages.length - 1];
           const unreadCount = messages.filter(
@@ -328,6 +366,10 @@ const FindMatchesConversations = () => {
     () =>
       joinedGroups
         .map((group) => {
+          if (isConversationHiddenForUser(group, currentUser?.id)) {
+            return null;
+          }
+
           const messages = group?.messages || [];
           const lastMessage = messages[messages.length - 1];
           const unreadCount = messages.filter(
@@ -351,6 +393,7 @@ const FindMatchesConversations = () => {
             status: "group",
           };
         })
+        .filter(Boolean)
         .sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0)),
     [joinedGroups, currentUser]
   );
@@ -514,6 +557,10 @@ const FindMatchesConversations = () => {
     upsertLegacyDirectChat(peerId, (existing) => ({
       ...existing,
       participants: existing.participants || [currentUser?.id, peerId],
+      clearedAtBy: restoreConversationVisibility(
+        existing.clearedAtBy,
+        existing.participants || [currentUser?.id, peerId]
+      ),
       lastUpdated: Date.now(),
       messages: [
         ...(existing.messages || []),
@@ -538,6 +585,10 @@ const FindMatchesConversations = () => {
         group.id === groupId
           ? {
               ...group,
+              clearedAtBy: restoreConversationVisibility(
+                group.clearedAtBy,
+                group.memberIds || []
+              ),
               lastUpdated: Date.now(),
               messages: [
                 ...(group.messages || []),
@@ -551,6 +602,44 @@ const FindMatchesConversations = () => {
                   readBy: [currentUser?.id],
                 },
               ],
+            }
+          : group
+      )
+    );
+  };
+
+  const clearLegacyDirectConversation = (peerId) => {
+    const key = getDirectChatKey(currentUser?.id, peerId);
+
+    setDirectChats((prev) => {
+      const existing = prev[key];
+      if (!existing) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [key]: {
+          ...existing,
+          clearedAtBy: {
+            ...(existing.clearedAtBy || {}),
+            [currentUser?.id]: Date.now(),
+          },
+        },
+      };
+    });
+  };
+
+  const clearLegacyGroupConversation = (groupId) => {
+    setGroupChats((prev) =>
+      prev.map((group) =>
+        group.id === groupId
+          ? {
+              ...group,
+              clearedAtBy: {
+                ...(group.clearedAtBy || {}),
+                [currentUser?.id]: Date.now(),
+              },
             }
           : group
       )
@@ -972,6 +1061,81 @@ const FindMatchesConversations = () => {
     await handleSelectDirectThread(thread.id);
   };
 
+  const openDeleteConversationDialog = (conversation) => {
+    if (!conversation?.id) {
+      return;
+    }
+
+    const conversationType = conversation?.type || conversation?.status;
+    const resolvedName =
+      conversationType === "group"
+        ? (conversation?.name || selectedGroup?.name || "this group").replace(/^#\s*/, "")
+        : conversation?.name || selectedDirectPeer?.username || "this conversation";
+
+    setConversationPendingDelete({
+      id: conversation.id,
+      type: conversationType,
+      name: resolvedName,
+    });
+  };
+
+  const closeDeleteConversationDialog = () => {
+    if (isDeletingConversation) {
+      return;
+    }
+
+    setConversationPendingDelete(null);
+  };
+
+  const handleDeleteConversation = async () => {
+    if (!conversationPendingDelete) {
+      return;
+    }
+
+    const targetConversation = conversationPendingDelete;
+    setIsDeletingConversation(true);
+    setStatusMessage("");
+
+    try {
+      if (chatMode === "railway-api") {
+        const payload = targetConversation.type === "direct"
+          ? await deleteRemoteDirectConversation(targetConversation.id)
+          : await deleteRemoteGroupConversation(targetConversation.id);
+
+        applyRemoteChatState(payload);
+      } else if (targetConversation.type === "direct") {
+        clearLegacyDirectConversation(targetConversation.id);
+      } else {
+        clearLegacyGroupConversation(targetConversation.id);
+      }
+
+      if (
+        selectedChat?.type === targetConversation.type &&
+        selectedChat?.id === targetConversation.id
+      ) {
+        setSelectedChat(null);
+      }
+
+      setReplyTargetId(null);
+      setConversationPendingDelete(null);
+      setStatusMessage(
+        targetConversation.type === "group"
+          ? `Removed # ${targetConversation.name} from your inbox.`
+          : `Removed ${targetConversation.name} from your inbox.`
+      );
+    } catch (error) {
+      if (shouldFallbackToLegacyChat(error)) {
+        fallbackToLegacyChat();
+        setConversationPendingDelete(null);
+        return;
+      }
+
+      setStatusMessage(error.message || "Unable to delete this conversation right now.");
+    } finally {
+      setIsDeletingConversation(false);
+    }
+  };
+
   const inboxThreads = useMemo(
     () => [...directThreads, ...groupThreads].sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0)),
     [directThreads, groupThreads]
@@ -1039,6 +1203,13 @@ const FindMatchesConversations = () => {
     ? {
         senderName: getMessageAuthorLabel(replyTarget),
         preview: getMessagePreviewText(replyTarget),
+      }
+    : null;
+  const selectedConversationDeleteTarget = selectedChat
+    ? {
+        id: selectedChat.id,
+        type: selectedChat.type,
+        name: selectedChatName || "this conversation",
       }
     : null;
   const selectedGroupMemberLabels = selectedGroupMembers
@@ -1219,7 +1390,9 @@ const FindMatchesConversations = () => {
                             key={`${thread.status}-${thread.id}`}
                             conversation={thread}
                             onSelect={() => handleSelectInboxThread(thread)}
+                            onDelete={openDeleteConversationDialog}
                             isActive={selectedChat?.type === thread.status && selectedChat?.id === thread.id}
+                            isBusy={isDeletingConversation}
                           />
                         ))}
                       </div>
@@ -1290,6 +1463,15 @@ const FindMatchesConversations = () => {
                         className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground transition-gentle hover:bg-muted"
                       >
                         Matches
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openDeleteConversationDialog(selectedConversationDeleteTarget)}
+                        disabled={!selectedConversationDeleteTarget || isDeletingConversation}
+                        className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background/75 text-muted-foreground transition-gentle hover:border-destructive/25 hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-60"
+                        aria-label="Delete this conversation"
+                      >
+                        <Icon name="Trash2" size={16} color="currentColor" />
                       </button>
                     </div>
 
@@ -1394,7 +1576,9 @@ const FindMatchesConversations = () => {
                           key={`${thread.status}-${thread.id}`}
                           conversation={thread}
                           onSelect={() => handleSelectInboxThread(thread)}
+                          onDelete={openDeleteConversationDialog}
                           isActive={selectedChat?.type === thread.status && selectedChat?.id === thread.id}
+                          isBusy={isDeletingConversation}
                         />
                       ))}
                     </div>
@@ -1455,6 +1639,15 @@ const FindMatchesConversations = () => {
                       <div className="hidden rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary md:inline-flex">
                         {selectedChat?.type === "direct" ? "Direct" : "Group"}
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => openDeleteConversationDialog(selectedConversationDeleteTarget)}
+                        disabled={!selectedConversationDeleteTarget || isDeletingConversation}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background/75 text-muted-foreground transition-gentle hover:border-destructive/25 hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-60"
+                        aria-label="Delete this conversation"
+                      >
+                        <Icon name="Trash2" size={16} color="currentColor" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => setSelectedChat(null)}
@@ -1835,6 +2028,72 @@ const FindMatchesConversations = () => {
                       Create group chat
                     </Button>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {conversationPendingDelete && (
+          <div
+            className="fixed inset-0 z-[230] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm"
+            onClick={closeDeleteConversationDialog}
+          >
+            <div
+              className="w-full max-w-md overflow-hidden rounded-[2rem] border border-border bg-card shadow-[0_28px_80px_rgba(40,24,29,0.28)]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="border-b border-border bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-card)_92%,var(--color-primary)_8%),var(--color-card))] px-5 py-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Delete conversation</p>
+                    <h3 className="mt-1 text-2xl font-heading font-semibold text-foreground">
+                      Remove from inbox
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeDeleteConversationDialog}
+                    disabled={isDeletingConversation}
+                    className="rounded-full p-2 text-muted-foreground transition-gentle hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                    aria-label="Close delete conversation dialog"
+                  >
+                    <Icon name="X" size={18} color="currentColor" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="px-5 py-5">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+                  <Icon name="Trash2" size={24} color="currentColor" />
+                </div>
+                <p className="mt-4 text-base font-semibold text-foreground">
+                  Delete {conversationPendingDelete.type === "group" ? `# ${conversationPendingDelete.name}` : conversationPendingDelete.name}?
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  This removes the conversation from your inbox view. The other person or group members will keep their copy.
+                </p>
+              </div>
+
+              <div className="border-t border-border bg-card/95 px-5 py-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={closeDeleteConversationDialog}
+                    disabled={isDeletingConversation}
+                    className="rounded-full"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    iconName="Trash2"
+                    onClick={handleDeleteConversation}
+                    loading={isDeletingConversation}
+                    className="rounded-full"
+                  >
+                    Delete conversation
+                  </Button>
                 </div>
               </div>
             </div>

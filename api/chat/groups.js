@@ -1,7 +1,7 @@
 const { withTransaction } = require("../_lib/db");
 const { requireSession } = require("../_lib/auth");
 const { createHttpError, ensureMethod, handleApiError, parseJsonBody, sendJson } = require("../_lib/http");
-const { createGroupChat, markGroupChatRead, sendGroupMessage } = require("../_lib/chat");
+const { createGroupChat, deleteGroupConversationForUser, markGroupChatRead, sendGroupMessage } = require("../_lib/chat");
 
 module.exports = async (req, res) => {
   if (!ensureMethod(req, res, ["POST"])) {
@@ -28,6 +28,12 @@ module.exports = async (req, res) => {
       if (action === "read") {
         return {
           chatState: await markGroupChatRead(session.user.id, body?.groupId, connection),
+        };
+      }
+
+      if (action === "delete") {
+        return {
+          chatState: await deleteGroupConversationForUser(session.user.id, body?.groupId, connection),
         };
       }
 
