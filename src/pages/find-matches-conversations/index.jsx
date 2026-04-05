@@ -41,6 +41,22 @@ const defaultAvatar = (seed) =>
 const NO_MATCH_STATUS_MESSAGE =
   "Can't find a match right now. IntroVibe only shows people with the same personality type and shared interests.";
 const REMOTE_CHAT_REFRESH_MS = 5000;
+const MESSAGE_PREVIEW_MAX_LENGTH = 90;
+
+const getMessagePreviewText = (message) => {
+  const content = (message?.content || "").trim();
+  if (content) {
+    return content.length > MESSAGE_PREVIEW_MAX_LENGTH
+      ? `${content.slice(0, MESSAGE_PREVIEW_MAX_LENGTH).trimEnd()}...`
+      : content;
+  }
+
+  if (message?.imageData) {
+    return "Photo attachment";
+  }
+
+  return "Original message unavailable";
+};
 
 const formatSyncTime = (timestamp) => {
   if (!timestamp) return "";
@@ -78,6 +94,7 @@ const FindMatchesConversations = () => {
   const [matchesMode, setMatchesMode] = useState("legacy-local");
   const [isLoadingMatches, setIsLoadingMatches] = useState(true);
   const [lastMatchesSyncAt, setLastMatchesSyncAt] = useState(null);
+  const [replyTargetId, setReplyTargetId] = useState(null);
 
   const personalityType = currentUser?.personalityType;
   const personalityMeta = PERSONALITY_META[personalityType];
@@ -370,6 +387,87 @@ const FindMatchesConversations = () => {
     return [];
   }, [selectedChat, selectedDirectPeer, selectedGroup, currentUser, directChats]);
 
+  const findUserById = (userId) => users.find((user) => user.id === userId) || null;
+
+  const getMessageAuthorLabel = (message) => {
+    if (!message) {
+      return "Original message";
+    }
+
+    if (message.senderId === currentUser?.id) {
+      return "You";
+    }
+
+    const sender = findUserById(message.senderId);
+    if (sender?.username) {
+      return sender.username;
+    }
+
+    if (selectedChat?.type === "direct") {
+      return selectedDirectPeer?.username || "Match";
+    }
+
+    return "Group member";
+  };
+
+  const selectedMessagesLookup = useMemo(
+    () => Object.fromEntries(selectedMessages.map((message) => [message.id, message])),
+    [selectedMessages]
+  );
+
+  const replyTarget = useMemo(
+    () => selectedMessagesLookup[replyTargetId] || null,
+    [replyTargetId, selectedMessagesLookup]
+  );
+
+  const selectedMessagesWithContext = useMemo(
+    () =>
+      selectedMessages.map((message) => {
+        const sender = findUserById(message.senderId) || selectedDirectPeer;
+        const referencedMessage = message?.replyToMessageId
+          ? selectedMessagesLookup[message.replyToMessageId] || null
+          : null;
+
+        return {
+          ...message,
+          senderName:
+            selectedChat?.type === "group" && message.senderId !== currentUser?.id
+              ? sender?.username
+              : null,
+          avatar: defaultAvatar(sender?.username || selectedGroup?.name),
+          avatarAlt: `${sender?.username || selectedGroup?.name} avatar`,
+          isRead: false,
+          replyToMessage: message?.replyToMessageId
+            ? {
+                id: message.replyToMessageId,
+                senderName: getMessageAuthorLabel(referencedMessage),
+                preview: getMessagePreviewText(referencedMessage),
+                isMissing: !referencedMessage,
+              }
+            : null,
+        };
+      }),
+    [
+      currentUser,
+      selectedChat,
+      selectedDirectPeer,
+      selectedGroup,
+      selectedMessages,
+      selectedMessagesLookup,
+      users,
+    ]
+  );
+
+  useEffect(() => {
+    setReplyTargetId(null);
+  }, [selectedChat?.id, selectedChat?.type]);
+
+  useEffect(() => {
+    if (replyTargetId && !selectedMessagesLookup[replyTargetId]) {
+      setReplyTargetId(null);
+    }
+  }, [replyTargetId, selectedMessagesLookup]);
+
   const applyRemoteChatState = (payload) => {
     setDirectChats(payload?.directChats || {});
     setGroupChats(payload?.groupChats || []);
@@ -401,6 +499,7 @@ const FindMatchesConversations = () => {
           senderId: currentUser?.id,
           content: message?.text || '',
           imageData: message?.imageData || null,
+          replyToMessageId: message?.replyToMessageId || null,
           timestamp: Date.now(),
           readBy: [currentUser?.id],
         },
@@ -424,6 +523,7 @@ const FindMatchesConversations = () => {
                   senderId: currentUser?.id,
                   content: message?.text || '',
                   imageData: message?.imageData || null,
+                  replyToMessageId: message?.replyToMessageId || null,
                   timestamp: Date.now(),
                   readBy: [currentUser?.id],
                 },
@@ -628,13 +728,17 @@ const FindMatchesConversations = () => {
   const handleSendMessage = async (payload) => {
     if (!selectedChat) return;
     setStatusMessage('');
+    const nextPayload = replyTargetId
+      ? { ...payload, replyToMessageId: replyTargetId }
+      : payload;
 
     if (chatMode === 'railway-api') {
       try {
         const nextState = selectedChat.type === 'direct'
-          ? await sendRemoteDirectMessage(selectedChat.id, payload)
-          : await sendRemoteGroupMessage(selectedChat.id, payload);
+          ? await sendRemoteDirectMessage(selectedChat.id, nextPayload)
+          : await sendRemoteGroupMessage(selectedChat.id, nextPayload);
         applyRemoteChatState(nextState);
+        setReplyTargetId(null);
         return;
       } catch (error) {
         if (!shouldFallbackToLegacyChat(error)) {
@@ -647,11 +751,13 @@ const FindMatchesConversations = () => {
     }
 
     if (selectedChat.type === 'direct') {
-      addLegacyDirectMessage(selectedChat.id, payload);
+      addLegacyDirectMessage(selectedChat.id, nextPayload);
+      setReplyTargetId(null);
       return;
     }
 
-    addLegacyGroupMessage(selectedChat.id, payload);
+    addLegacyGroupMessage(selectedChat.id, nextPayload);
+    setReplyTargetId(null);
   };
 
   const handleCreateGroup = async () => {
@@ -893,6 +999,12 @@ const FindMatchesConversations = () => {
   const showMobileConversation = activeTab === "messages" && Boolean(selectedChat);
   const showMobileMatches = activeTab === "matches";
   const showCompactMessageLayout = activeTab === "messages";
+  const composerReplyTarget = replyTarget
+    ? {
+        senderName: getMessageAuthorLabel(replyTarget),
+        preview: getMessagePreviewText(replyTarget),
+      }
+    : null;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,color-mix(in_oklab,var(--color-primary)_14%,transparent),transparent_30%),linear-gradient(180deg,var(--color-background),color-mix(in_oklab,var(--color-background)_88%,var(--color-secondary)_12%))]">
@@ -1147,28 +1259,16 @@ const FindMatchesConversations = () => {
 
                   <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,color-mix(in_oklab,var(--color-primary)_12%,transparent),transparent_32%),linear-gradient(180deg,color-mix(in_oklab,var(--color-background)_78%,var(--color-card)_22%),color-mix(in_oklab,var(--color-card)_92%,var(--color-muted)_8%))] px-4 py-5">
                     <div className="mx-auto max-w-3xl">
-                      {selectedMessages.length > 0 ? (
-                        selectedMessages.map((message) => {
-                          const sender =
-                            users.find((user) => user.id === message.senderId) || selectedDirectPeer;
-
-                          return (
-                            <MessageBubble
-                              key={message.id}
-                              message={{
-                                ...message,
-                                senderName:
-                                  selectedChat.type === "group" && message.senderId !== currentUser?.id
-                                    ? sender?.username
-                                    : null,
-                                avatar: defaultAvatar(sender?.username || selectedGroup?.name),
-                                avatarAlt: `${sender?.username || selectedGroup?.name} avatar`,
-                                isRead: false,
-                              }}
-                              isOwn={message.senderId === currentUser?.id}
-                            />
-                          );
-                        })
+                      {selectedMessagesWithContext.length > 0 ? (
+                        selectedMessagesWithContext.map((message) => (
+                          <MessageBubble
+                            key={message.id}
+                            message={message}
+                            isOwn={message.senderId === currentUser?.id}
+                            isReplying={replyTargetId === message.id}
+                            onReply={() => setReplyTargetId(message.id)}
+                          />
+                        ))
                       ) : (
                         <div className="flex min-h-[42svh] items-center justify-center">
                           <div className="max-w-md rounded-[2rem] border border-dashed border-border bg-card/80 px-6 py-8 text-center shadow-gentle-sm">
@@ -1188,6 +1288,8 @@ const FindMatchesConversations = () => {
                   <MessageComposer
                     compact
                     recipientName={selectedChat.type === "direct" ? selectedDirectPeer?.username : `# ${selectedGroup?.name}`}
+                    replyToMessage={composerReplyTarget}
+                    onCancelReply={() => setReplyTargetId(null)}
                     onSend={handleSendMessage}
                     onSaveDraft={(value) => setStatusMessage(`Draft saved (${value.length} characters).`)}
                     onReplyLater={() => setStatusMessage("Saved for later.")}
@@ -1322,28 +1424,16 @@ const FindMatchesConversations = () => {
 
                   <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,color-mix(in_oklab,var(--color-primary)_12%,transparent),transparent_32%),linear-gradient(180deg,color-mix(in_oklab,var(--color-background)_78%,var(--color-card)_22%),color-mix(in_oklab,var(--color-card)_92%,var(--color-muted)_8%))] px-4 py-6 md:px-6">
                     <div className="mx-auto max-w-3xl">
-                      {selectedMessages.length > 0 ? (
-                        selectedMessages.map((message) => {
-                          const sender =
-                            users.find((user) => user.id === message.senderId) || selectedDirectPeer;
-
-                          return (
-                            <MessageBubble
-                              key={message.id}
-                              message={{
-                                ...message,
-                                senderName:
-                                  selectedChat.type === "group" && message.senderId !== currentUser?.id
-                                    ? sender?.username
-                                    : null,
-                                avatar: defaultAvatar(sender?.username || selectedGroup?.name),
-                                avatarAlt: `${sender?.username || selectedGroup?.name} avatar`,
-                                isRead: false,
-                              }}
-                              isOwn={message.senderId === currentUser?.id}
-                            />
-                          );
-                        })
+                      {selectedMessagesWithContext.length > 0 ? (
+                        selectedMessagesWithContext.map((message) => (
+                          <MessageBubble
+                            key={message.id}
+                            message={message}
+                            isOwn={message.senderId === currentUser?.id}
+                            isReplying={replyTargetId === message.id}
+                            onReply={() => setReplyTargetId(message.id)}
+                          />
+                        ))
                       ) : (
                         <div className="flex min-h-[22rem] items-center justify-center">
                           <div className="max-w-md rounded-[2rem] border border-dashed border-border bg-card/80 px-6 py-8 text-center shadow-gentle-sm">
@@ -1362,6 +1452,8 @@ const FindMatchesConversations = () => {
 
                   <MessageComposer
                     recipientName={selectedChat.type === "direct" ? selectedDirectPeer?.username : `# ${selectedGroup?.name}`}
+                    replyToMessage={composerReplyTarget}
+                    onCancelReply={() => setReplyTargetId(null)}
                     onSend={handleSendMessage}
                     onSaveDraft={(value) => setStatusMessage(`Draft saved (${value.length} characters).`)}
                     onReplyLater={() => setStatusMessage("Saved for later.")}

@@ -7,6 +7,8 @@ const MessageComposer = ({
   onSend,
   onSaveDraft,
   onReplyLater,
+  replyToMessage = null,
+  onCancelReply,
   initialMessage = '',
   onInitialMessageApplied,
   disabled = false,
@@ -112,6 +114,36 @@ const MessageComposer = ({
           >
             Skip prompts
           </button>
+        </div>
+      )}
+
+      {replyToMessage && (
+        <div
+          className={`rounded-[1.4rem] border border-primary/20 bg-primary/10 ${
+            compact ? 'mb-3 px-3 py-2.5' : 'mb-4 px-4 py-3'
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
+              <Icon name="Reply" size={15} color="currentColor" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary">
+                Replying to {replyToMessage?.senderName}
+              </p>
+              <p className="mt-1 line-clamp-2 text-sm text-foreground">
+                {replyToMessage?.preview}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onCancelReply}
+              className="rounded-full p-2 text-muted-foreground transition-gentle hover:bg-background/70 hover:text-foreground"
+              aria-label="Cancel reply"
+            >
+              <Icon name="X" size={16} color="currentColor" />
+            </button>
+          </div>
         </div>
       )}
 

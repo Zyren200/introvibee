@@ -2,7 +2,7 @@ import React from 'react';
 import Icon from '../../../components/AppIcon';
 import Image from '../../../components/AppImage';
 
-const MessageBubble = ({ message, isOwn }) => {
+const MessageBubble = ({ message, isOwn, onReply, isReplying = false }) => {
   const formatTime = (date) =>
     new Date(date)?.toLocaleTimeString('en-US', {
       hour: 'numeric',
@@ -30,6 +30,27 @@ const MessageBubble = ({ message, isOwn }) => {
               : 'rounded-bl-md border border-border/80 bg-card/95 text-foreground backdrop-blur'
           }`}
         >
+          {message?.replyToMessage && (
+            <div
+              className={`mb-3 rounded-[1.1rem] border px-3 py-2 ${
+                isOwn
+                  ? 'border-primary-foreground/20 bg-primary-foreground/10'
+                  : 'border-border/80 bg-background/70'
+              }`}
+            >
+              <p className={`text-[11px] font-semibold ${isOwn ? 'text-primary-foreground/85' : 'text-primary'}`}>
+                Replying to {message?.replyToMessage?.senderName}
+              </p>
+              <p
+                className={`mt-1 text-xs leading-relaxed ${
+                  isOwn ? 'text-primary-foreground/75' : 'text-muted-foreground'
+                } ${message?.replyToMessage?.isMissing ? 'italic' : ''}`}
+              >
+                {message?.replyToMessage?.preview}
+              </p>
+            </div>
+          )}
+
           {message?.senderName && !isOwn && (
             <p className="mb-2 text-xs font-semibold text-primary">
               {message?.senderName}
@@ -71,6 +92,21 @@ const MessageBubble = ({ message, isOwn }) => {
         </div>
 
         <div className={`mt-1.5 flex items-center gap-2 ${isOwn ? 'flex-row-reverse' : ''}`}>
+          {onReply && (
+            <button
+              type="button"
+              onClick={onReply}
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs transition-gentle ${
+                isReplying
+                  ? 'bg-primary/12 text-primary'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
+              aria-label="Reply to this message"
+            >
+              <Icon name="Reply" size={12} color="currentColor" />
+              <span>Reply</span>
+            </button>
+          )}
           <span className="text-xs text-muted-foreground">{formatTime(message?.timestamp)}</span>
           {isOwn && message?.isRead && (
             <div className="flex items-center space-x-1">

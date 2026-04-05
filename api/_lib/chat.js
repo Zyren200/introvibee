@@ -10,6 +10,63 @@ const canCreateGroupChats = (personalityType) =>
 const createInClause = (values = []) => values.map(() => "?").join(", ");
 
 const toTimestamp = (value) => (value ? new Date(value).getTime() : Date.now());
+const MESSAGE_CONTENT_VERSION = "introVibe:message:v1";
+
+const parseStoredMessageContent = (value) => {
+  const rawValue = typeof value === "string" ? value : "";
+  if (!rawValue) {
+    return {
+      content: "",
+      replyToMessageId: null,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue);
+    if (parsed?.__introVibeMessage !== MESSAGE_CONTENT_VERSION) {
+      throw new Error("Not an IntroVibe message envelope.");
+    }
+
+    return {
+      content: typeof parsed?.text === "string" ? parsed.text : "",
+      replyToMessageId:
+        typeof parsed?.replyToMessageId === "string" && parsed.replyToMessageId.trim()
+          ? parsed.replyToMessageId.trim()
+          : null,
+    };
+  } catch (error) {
+    return {
+      content: rawValue,
+      replyToMessageId: null,
+    };
+  }
+};
+
+const serializeStoredMessageContent = (payload = {}) => {
+  const content = (payload?.text || "").toString().trim();
+  const replyToMessageId =
+    typeof payload?.replyToMessageId === "string" && payload.replyToMessageId.trim()
+      ? payload.replyToMessageId.trim()
+      : null;
+
+  if (!replyToMessageId) {
+    return {
+      content,
+      replyToMessageId: null,
+      storedContent: content,
+    };
+  }
+
+  return {
+    content,
+    replyToMessageId,
+    storedContent: JSON.stringify({
+      __introVibeMessage: MESSAGE_CONTENT_VERSION,
+      text: content,
+      replyToMessageId,
+    }),
+  };
+};
 
 const mapMessages = (messageRows, readRows) => {
   const readByMessage = readRows.reduce((accumulator, row) => {
@@ -21,14 +78,19 @@ const mapMessages = (messageRows, readRows) => {
     return accumulator;
   }, {});
 
-  return messageRows.map((row) => ({
-    id: row.id,
-    senderId: row.sender_id,
-    content: row.content || "",
-    imageData: row.image_url || null,
-    timestamp: toTimestamp(row.created_at),
-    readBy: Array.from(new Set([row.sender_id, ...(readByMessage[row.id] || [])])),
-  }));
+  return messageRows.map((row) => {
+    const normalizedContent = parseStoredMessageContent(row.content);
+
+    return {
+      id: row.id,
+      senderId: row.sender_id,
+      content: normalizedContent.content,
+      imageData: row.image_url || null,
+      timestamp: toTimestamp(row.created_at),
+      readBy: Array.from(new Set([row.sender_id, ...(readByMessage[row.id] || [])])),
+      replyToMessageId: normalizedContent.replyToMessageId,
+    };
+  });
 };
 
 const listDirectChatsForUser = async (userId, executor = query) => {
@@ -236,14 +298,51 @@ const ensureDirectConversation = async (userId, peerId, executor = query) => {
   };
 };
 
+const ensureReplyTarget = async ({
+  table,
+  conversationColumn,
+  conversationId,
+  replyToMessageId,
+  executor = query,
+}) => {
+  if (!replyToMessageId) {
+    return null;
+  }
+
+  const rows = await runQuery(
+    executor,
+    `SELECT id
+     FROM ${table}
+     WHERE id = ?
+       AND ${conversationColumn} = ?
+       AND deleted_at IS NULL
+     LIMIT 1`,
+    [replyToMessageId, conversationId]
+  );
+
+  if (!rows.length) {
+    throw createHttpError("The message you're replying to is no longer available.", 400);
+  }
+
+  return rows[0];
+};
+
 const sendDirectMessage = async (senderId, peerId, payload, executor = query) => {
   const conversation = await ensureDirectConversation(senderId, peerId, executor);
-  const content = (payload?.text || "").toString().trim();
+  const { content, replyToMessageId, storedContent } = serializeStoredMessageContent(payload);
   const imageData = payload?.imageData || null;
 
   if (!content && !imageData) {
     throw createHttpError("Message content is required.", 400);
   }
+
+  await ensureReplyTarget({
+    table: "direct_messages",
+    conversationColumn: "conversation_id",
+    conversationId: conversation.id,
+    replyToMessageId,
+    executor,
+  });
 
   const messageId = crypto.randomUUID();
   await runQuery(
@@ -257,7 +356,7 @@ const sendDirectMessage = async (senderId, peerId, payload, executor = query) =>
        image_url
      )
      VALUES (?, ?, ?, ?, ?, ?)`,
-    [messageId, conversation.id, senderId, imageData ? "image" : "text", content, imageData]
+    [messageId, conversation.id, senderId, imageData ? "image" : "text", storedContent, imageData]
   );
   await runQuery(
     executor,
@@ -421,12 +520,20 @@ const sendGroupMessage = async (userId, groupId, payload, executor = query) => {
     throw createHttpError("You are not a member of that group chat.", 403);
   }
 
-  const content = (payload?.text || "").toString().trim();
+  const { content, replyToMessageId, storedContent } = serializeStoredMessageContent(payload);
   const imageData = payload?.imageData || null;
 
   if (!content && !imageData) {
     throw createHttpError("Message content is required.", 400);
   }
+
+  await ensureReplyTarget({
+    table: "group_messages",
+    conversationColumn: "group_chat_id",
+    conversationId: groupId,
+    replyToMessageId,
+    executor,
+  });
 
   const messageId = crypto.randomUUID();
   await runQuery(
@@ -440,7 +547,7 @@ const sendGroupMessage = async (userId, groupId, payload, executor = query) => {
        image_url
      )
      VALUES (?, ?, ?, ?, ?, ?)`,
-    [messageId, groupId, userId, imageData ? "image" : "text", content, imageData]
+    [messageId, groupId, userId, imageData ? "image" : "text", storedContent, imageData]
   );
   await runQuery(
     executor,
