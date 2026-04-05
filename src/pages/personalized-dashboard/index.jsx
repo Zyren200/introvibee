@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../../components/ui/Header";
 import NavigationBreadcrumb from "../../components/ui/NavigationBreadcrumb";
@@ -13,7 +13,8 @@ import {
 
 const PersonalizedDashboard = () => {
   const navigate = useNavigate();
-  const { currentUser, users } = useIntroVibeAuth();
+  const { currentUser, users, resetAssessment } = useIntroVibeAuth();
+  const [isRetakingAssessment, setIsRetakingAssessment] = useState(false);
 
   const personalityType = currentUser?.personalityType || currentUser?.predictedPersonality || "Ambivert";
   const personalityMeta = PERSONALITY_META[personalityType];
@@ -28,6 +29,18 @@ const PersonalizedDashboard = () => {
       .map((user) => ({ user, match: buildMatchSummary(currentUser, user) }))
       .filter(({ match }) => match.samePersonality && match.sharedInterests.length > 0).length;
   }, [users, currentUser]);
+
+  const handleRetakeAssessment = async () => {
+    setIsRetakingAssessment(true);
+    const updatedUser = await resetAssessment();
+    setIsRetakingAssessment(false);
+
+    if (!updatedUser) {
+      return;
+    }
+
+    navigate("/adaptive-quiz");
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-secondary/10">
@@ -84,7 +97,9 @@ const PersonalizedDashboard = () => {
                 size="sm"
                 iconName="ClipboardList"
                 className="mt-4"
-                onClick={() => navigate("/adaptive-quiz")}
+                onClick={handleRetakeAssessment}
+                disabled={isRetakingAssessment}
+                loading={isRetakingAssessment}
               >
                 Retake test
               </Button>
@@ -153,7 +168,13 @@ const PersonalizedDashboard = () => {
                   <Button variant="default" iconName="Grid3X3" onClick={() => navigate("/sudoku-puzzle")}>
                     Open Sudoku
                   </Button>
-                  <Button variant="outline" iconName="ClipboardList" onClick={() => navigate("/adaptive-quiz")}>
+                  <Button
+                    variant="outline"
+                    iconName="ClipboardList"
+                    onClick={handleRetakeAssessment}
+                    disabled={isRetakingAssessment}
+                    loading={isRetakingAssessment}
+                  >
                     Retake personality test
                   </Button>
                 </div>

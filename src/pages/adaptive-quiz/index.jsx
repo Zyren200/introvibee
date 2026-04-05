@@ -13,21 +13,26 @@ import {
   resolvePersonalityFromAnswers,
 } from "../../utils/introVibe";
 
+const getEmptyAnswers = () =>
+  personalityQuestions.reduce((accumulator, question) => {
+    accumulator[question.id] = "";
+    return accumulator;
+  }, {});
+
 const AdaptiveQuiz = () => {
   const navigate = useNavigate();
-  const { currentUser, completeAssessment, error: authError } = useIntroVibeAuth();
+  const { currentUser, completeAssessment, resetAssessment, error: authError } = useIntroVibeAuth();
   const [answers, setAnswers] = useState(() => {
-    const savedAnswers = Array.isArray(currentUser?.assessmentAnswers)
-      ? currentUser.assessmentAnswers
-      : [];
-    return personalityQuestions.reduce((acc, question, index) => {
-      acc[question.id] = savedAnswers[index] || "";
-      return acc;
+    const savedAnswers = Array.isArray(currentUser?.assessmentAnswers) ? currentUser.assessmentAnswers : [];
+    return personalityQuestions.reduce((accumulator, question, index) => {
+      accumulator[question.id] = savedAnswers[index] || "";
+      return accumulator;
     }, {});
   });
   const [currentStep, setCurrentStep] = useState(0);
   const [resultType, setResultType] = useState(currentUser?.personalityType || null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRetaking, setIsRetaking] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
   const currentQuestion = personalityQuestions[currentStep];
@@ -42,6 +47,13 @@ const AdaptiveQuiz = () => {
     () => personalityQuestions.map((question) => answers[question.id]).filter(Boolean),
     [answers]
   );
+
+  const resetQuizState = () => {
+    setAnswers(getEmptyAnswers());
+    setCurrentStep(0);
+    setResultType(null);
+    setSubmitError("");
+  };
 
   const handleChooseAnswer = (questionId, value) => {
     setAnswers((prev) => ({
@@ -78,16 +90,18 @@ const AdaptiveQuiz = () => {
     setResultType(updatedUser?.personalityType || resolvedPersonality);
   };
 
-  const handleRetake = () => {
-    setAnswers(
-      personalityQuestions.reduce((acc, question) => {
-        acc[question.id] = "";
-        return acc;
-      }, {})
-    );
-    setCurrentStep(0);
-    setResultType(null);
+  const handleRetake = async () => {
     setSubmitError("");
+    setIsRetaking(true);
+    const updatedUser = await resetAssessment();
+    setIsRetaking(false);
+
+    if (!updatedUser) {
+      setSubmitError(authError || "We could not reset your assessment right now.");
+      return;
+    }
+
+    resetQuizState();
   };
 
   if (resultMeta) {
@@ -163,10 +177,21 @@ const AdaptiveQuiz = () => {
             </div>
 
             <div className="mt-8 flex flex-col sm:flex-row gap-3">
-              <Button variant="default" iconName="ArrowRight" onClick={() => navigate(nextRoute)}>
+              <Button
+                variant="default"
+                iconName="ArrowRight"
+                onClick={() => navigate(nextRoute)}
+                disabled={isRetaking}
+              >
                 {activePersonality === "Introvert" ? "Continue to Sudoku" : "Continue to IntroVibe"}
               </Button>
-              <Button variant="outline" iconName="RotateCcw" onClick={handleRetake}>
+              <Button
+                variant="outline"
+                iconName="RotateCcw"
+                onClick={handleRetake}
+                disabled={isRetaking}
+                loading={isRetaking}
+              >
                 Retake test
               </Button>
             </div>

@@ -18,6 +18,7 @@ const GROUP_CHAT_KEY = "introVibeGroupChats";
 const REFLECTION_DATA_KEY = "isfReflectionData";
 const QUIET_ACTIVITY_KEY = "isfQuietActivities";
 const ADAPTIVE_QUIZ_PROGRESS_KEY = "adaptiveQuizProgress";
+const SUDOKU_PROGRESS_KEY = "introVibeSudokuProgress";
 const MATCH_COUNT_KEY = "isf-latest-match-count";
 const ONLINE_GRACE_MS = 5 * 60 * 1000;
 const REMOTE_USERS_REFRESH_MS = 15000;
@@ -190,6 +191,25 @@ const cleanupDeletedUserArtifacts = (userId) => {
   removeUserFromGroupChats(userId);
   removeUserBucketFromStorage(REFLECTION_DATA_KEY, userId);
   removeUserBucketFromStorage(QUIET_ACTIVITY_KEY, userId);
+  removeUserBucketFromStorage(SUDOKU_PROGRESS_KEY, userId);
+
+  try {
+    localStorage.removeItem(ADAPTIVE_QUIZ_PROGRESS_KEY);
+  } catch (cleanupError) {
+    console.error("Failed to clear adaptive quiz progress", cleanupError);
+  }
+
+  try {
+    sessionStorage.removeItem(MATCH_COUNT_KEY);
+  } catch (cleanupError) {
+    console.error("Failed to clear match count", cleanupError);
+  }
+};
+
+const clearAssessmentArtifacts = (userId) => {
+  if (userId) {
+    removeUserBucketFromStorage(SUDOKU_PROGRESS_KEY, userId);
+  }
 
   try {
     localStorage.removeItem(ADAPTIVE_QUIZ_PROGRESS_KEY);
@@ -661,6 +681,23 @@ export const IntroVibeAuthProvider = ({ children }) => {
       sudokuCompleted: true,
     });
 
+  const localResetAssessment = () => {
+    if (!currentUserId) {
+      const message = "No signed-in account to retake.";
+      setError(message);
+      return null;
+    }
+
+    clearAssessmentArtifacts(currentUserId);
+
+    return updateCurrentUserProfile({
+      personalityType: null,
+      assessmentCompleted: false,
+      assessmentAnswers: [],
+      sudokuCompleted: false,
+    });
+  };
+
   const localLogout = () => {
     if (currentUserId) {
       const logoutAt = Date.now();
@@ -802,6 +839,34 @@ export const IntroVibeAuthProvider = ({ children }) => {
     return localMarkSudokuComplete();
   };
 
+  const resetAssessment = async () => {
+    setError(null);
+
+    if (!currentUserId) {
+      const message = "No signed-in account to retake.";
+      setError(message);
+      return null;
+    }
+
+    if (authMode === "railway-api" || (isRemoteAuthEnabled() && getStoredSessionToken())) {
+      try {
+        const payload = await requestIntroVibeApi("/api/assessment/reset", {
+          method: "POST",
+        });
+
+        clearAssessmentArtifacts(currentUserId);
+        return applyRemoteAuthPayload(payload);
+      } catch (apiError) {
+        if (!shouldFallbackToLegacy(apiError)) {
+          setError(apiError.message);
+          return null;
+        }
+      }
+    }
+
+    return localResetAssessment();
+  };
+
   const logout = async () => {
     setError(null);
 
@@ -908,6 +973,7 @@ export const IntroVibeAuthProvider = ({ children }) => {
         deleteAccount,
         updateCurrentUserProfile,
         completeAssessment,
+        resetAssessment,
         markSudokuComplete,
       }}
     >
