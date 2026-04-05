@@ -10,8 +10,11 @@ export const shouldUseRemoteMatches = (authMode, currentUserId) =>
   Boolean(currentUserId) &&
   (authMode === "railway-api" || (isRemoteAuthEnabled() && getStoredSessionToken()));
 
+const isRecoverableMatchesApiError = (error) =>
+  isApiUnavailableError(error) || Number(error?.status) >= 500;
+
 export const shouldFallbackToLegacyMatches = (error) =>
-  isRemoteAuthEnabled() && !isApiOnlyMode() && isApiUnavailableError(error);
+  isRemoteAuthEnabled() && !isApiOnlyMode() && isRecoverableMatchesApiError(error);
 
 export const fetchRemoteMatches = async () => {
   const payload = await requestIntroVibeApi("/api/matches");

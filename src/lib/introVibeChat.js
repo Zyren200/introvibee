@@ -52,8 +52,11 @@ export const shouldUseRemoteChat = (authMode, currentUserId) =>
   Boolean(currentUserId) &&
   (authMode === "railway-api" || (isRemoteAuthEnabled() && getStoredSessionToken()));
 
+const isRecoverableChatApiError = (error) =>
+  isApiUnavailableError(error) || Number(error?.status) >= 500;
+
 export const shouldFallbackToLegacyChat = (error) =>
-  isRemoteAuthEnabled() && !isApiOnlyMode() && isApiUnavailableError(error);
+  isRemoteAuthEnabled() && !isApiOnlyMode() && isRecoverableChatApiError(error);
 
 export const fetchRemoteChatState = async () => requestIntroVibeApi("/api/chat/state");
 
