@@ -11,6 +11,41 @@ const getSharedInterests = (currentInterests = [], peerInterests = []) => {
   );
 };
 
+let matchTablesReadyPromise = null;
+
+const ensureMatchRecommendationTable = async () => {
+  if (!matchTablesReadyPromise) {
+    matchTablesReadyPromise = runQuery(
+      query,
+      `CREATE TABLE IF NOT EXISTS match_recommendations (
+         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+         user_id CHAR(36) NOT NULL,
+         matched_user_id CHAR(36) NOT NULL,
+         compatibility_score DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+         shared_interest_count TINYINT UNSIGNED NOT NULL DEFAULT 0,
+         same_personality TINYINT(1) NOT NULL DEFAULT 0,
+         status ENUM('suggested', 'saved', 'messaged', 'dismissed') NOT NULL DEFAULT 'suggested',
+         generated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+         PRIMARY KEY (id),
+         UNIQUE KEY uq_match_recommendations_pair (user_id, matched_user_id),
+         KEY idx_match_recommendations_user_status (user_id, status),
+         CONSTRAINT fk_match_recommendations_user
+           FOREIGN KEY (user_id) REFERENCES users (id)
+           ON DELETE CASCADE,
+         CONSTRAINT fk_match_recommendations_matched_user
+           FOREIGN KEY (matched_user_id) REFERENCES users (id)
+           ON DELETE CASCADE
+       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+    ).catch((error) => {
+      matchTablesReadyPromise = null;
+      throw error;
+    });
+  }
+
+  return matchTablesReadyPromise;
+};
+
 const buildMatchSummary = (currentUser, peer) => {
   const sharedInterests = getSharedInterests(currentUser?.interests, peer?.interests);
   const samePersonality =
@@ -88,6 +123,7 @@ const getMatchStatuses = async (userId, matchedUserIds, executor = query) => {
 };
 
 const listMatchesForUser = async (userId, executor = query) => {
+  await ensureMatchRecommendationTable();
   const currentUser = await getUserById(userId, executor);
   if (!currentUser) {
     throw createHttpError("User not found.", 404);
@@ -139,6 +175,7 @@ const listMatchesForUser = async (userId, executor = query) => {
 };
 
 const markMatchMessaged = async (userId, matchedUserId, executor = query) => {
+  await ensureMatchRecommendationTable();
   await runQuery(
     executor,
     `UPDATE match_recommendations

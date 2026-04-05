@@ -11,8 +11,181 @@ const createInClause = (values = []) => values.map(() => "?").join(", ");
 
 const toTimestamp = (value) => (value ? new Date(value).getTime() : Date.now());
 const MESSAGE_CONTENT_VERSION = "introVibe:message:v1";
+let coreChatTablesReadyPromise = null;
 let clearTablesReadyPromise = null;
 let clearTablesEnabled = null;
+
+const ensureCoreChatTables = async () => {
+  if (!coreChatTablesReadyPromise) {
+    coreChatTablesReadyPromise = (async () => {
+      await runQuery(
+        query,
+        `CREATE TABLE IF NOT EXISTS match_recommendations (
+           id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+           user_id CHAR(36) NOT NULL,
+           matched_user_id CHAR(36) NOT NULL,
+           compatibility_score DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+           shared_interest_count TINYINT UNSIGNED NOT NULL DEFAULT 0,
+           same_personality TINYINT(1) NOT NULL DEFAULT 0,
+           status ENUM('suggested', 'saved', 'messaged', 'dismissed') NOT NULL DEFAULT 'suggested',
+           generated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+           updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+           PRIMARY KEY (id),
+           UNIQUE KEY uq_match_recommendations_pair (user_id, matched_user_id),
+           KEY idx_match_recommendations_user_status (user_id, status),
+           CONSTRAINT fk_match_recommendations_user
+             FOREIGN KEY (user_id) REFERENCES users (id)
+             ON DELETE CASCADE,
+           CONSTRAINT fk_match_recommendations_matched_user
+             FOREIGN KEY (matched_user_id) REFERENCES users (id)
+             ON DELETE CASCADE
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+      );
+      await runQuery(
+        query,
+        `CREATE TABLE IF NOT EXISTS direct_conversations (
+           id CHAR(36) NOT NULL,
+           conversation_key VARCHAR(73) NOT NULL,
+           user_one_id CHAR(36) NOT NULL,
+           user_two_id CHAR(36) NOT NULL,
+           status ENUM('active', 'archived', 'blocked', 'restricted') NOT NULL DEFAULT 'active',
+           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+           updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+           last_message_at DATETIME NULL,
+           PRIMARY KEY (id),
+           UNIQUE KEY uq_direct_conversations_key (conversation_key),
+           KEY idx_direct_conversations_user_one (user_one_id),
+           KEY idx_direct_conversations_user_two (user_two_id),
+           CONSTRAINT fk_direct_conversations_user_one
+             FOREIGN KEY (user_one_id) REFERENCES users (id)
+             ON DELETE CASCADE,
+           CONSTRAINT fk_direct_conversations_user_two
+             FOREIGN KEY (user_two_id) REFERENCES users (id)
+             ON DELETE CASCADE
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+      );
+      await runQuery(
+        query,
+        `CREATE TABLE IF NOT EXISTS direct_messages (
+           id CHAR(36) NOT NULL,
+           conversation_id CHAR(36) NOT NULL,
+           sender_id CHAR(36) NOT NULL,
+           message_type ENUM('text', 'image', 'system') NOT NULL DEFAULT 'text',
+           content TEXT NULL,
+           image_url LONGTEXT NULL,
+           used_prompt TINYINT(1) NOT NULL DEFAULT 0,
+           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+           edited_at DATETIME NULL,
+           deleted_at DATETIME NULL,
+           PRIMARY KEY (id),
+           KEY idx_direct_messages_conversation_created (conversation_id, created_at),
+           KEY idx_direct_messages_sender (sender_id),
+           CONSTRAINT fk_direct_messages_conversation
+             FOREIGN KEY (conversation_id) REFERENCES direct_conversations (id)
+             ON DELETE CASCADE,
+           CONSTRAINT fk_direct_messages_sender
+             FOREIGN KEY (sender_id) REFERENCES users (id)
+             ON DELETE CASCADE
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+      );
+      await runQuery(
+        query,
+        `CREATE TABLE IF NOT EXISTS direct_message_reads (
+           message_id CHAR(36) NOT NULL,
+           user_id CHAR(36) NOT NULL,
+           read_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+           PRIMARY KEY (message_id, user_id),
+           KEY idx_direct_message_reads_user (user_id),
+           CONSTRAINT fk_direct_message_reads_message
+             FOREIGN KEY (message_id) REFERENCES direct_messages (id)
+             ON DELETE CASCADE,
+           CONSTRAINT fk_direct_message_reads_user
+             FOREIGN KEY (user_id) REFERENCES users (id)
+             ON DELETE CASCADE
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+      );
+      await runQuery(
+        query,
+        `CREATE TABLE IF NOT EXISTS group_chats (
+           id CHAR(36) NOT NULL,
+           name VARCHAR(120) NOT NULL,
+           created_by CHAR(36) NOT NULL,
+           is_archived TINYINT(1) NOT NULL DEFAULT 0,
+           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+           updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+           last_message_at DATETIME NULL,
+           PRIMARY KEY (id),
+           KEY idx_group_chats_created_by (created_by),
+           CONSTRAINT fk_group_chats_created_by
+             FOREIGN KEY (created_by) REFERENCES users (id)
+             ON DELETE CASCADE
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+      );
+      await runQuery(
+        query,
+        `CREATE TABLE IF NOT EXISTS group_chat_members (
+           group_chat_id CHAR(36) NOT NULL,
+           user_id CHAR(36) NOT NULL,
+           role ENUM('owner', 'member') NOT NULL DEFAULT 'member',
+           is_muted TINYINT(1) NOT NULL DEFAULT 0,
+           joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+           PRIMARY KEY (group_chat_id, user_id),
+           KEY idx_group_chat_members_user (user_id),
+           CONSTRAINT fk_group_chat_members_group
+             FOREIGN KEY (group_chat_id) REFERENCES group_chats (id)
+             ON DELETE CASCADE,
+           CONSTRAINT fk_group_chat_members_user
+             FOREIGN KEY (user_id) REFERENCES users (id)
+             ON DELETE CASCADE
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+      );
+      await runQuery(
+        query,
+        `CREATE TABLE IF NOT EXISTS group_messages (
+           id CHAR(36) NOT NULL,
+           group_chat_id CHAR(36) NOT NULL,
+           sender_id CHAR(36) NOT NULL,
+           message_type ENUM('text', 'image', 'system') NOT NULL DEFAULT 'text',
+           content TEXT NULL,
+           image_url LONGTEXT NULL,
+           created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+           edited_at DATETIME NULL,
+           deleted_at DATETIME NULL,
+           PRIMARY KEY (id),
+           KEY idx_group_messages_group_created (group_chat_id, created_at),
+           KEY idx_group_messages_sender (sender_id),
+           CONSTRAINT fk_group_messages_group
+             FOREIGN KEY (group_chat_id) REFERENCES group_chats (id)
+             ON DELETE CASCADE,
+           CONSTRAINT fk_group_messages_sender
+             FOREIGN KEY (sender_id) REFERENCES users (id)
+             ON DELETE CASCADE
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+      );
+      await runQuery(
+        query,
+        `CREATE TABLE IF NOT EXISTS group_message_reads (
+           message_id CHAR(36) NOT NULL,
+           user_id CHAR(36) NOT NULL,
+           read_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+           PRIMARY KEY (message_id, user_id),
+           KEY idx_group_message_reads_user (user_id),
+           CONSTRAINT fk_group_message_reads_message
+             FOREIGN KEY (message_id) REFERENCES group_messages (id)
+             ON DELETE CASCADE,
+           CONSTRAINT fk_group_message_reads_user
+             FOREIGN KEY (user_id) REFERENCES users (id)
+             ON DELETE CASCADE
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
+      );
+    })().catch((error) => {
+      coreChatTablesReadyPromise = null;
+      throw error;
+    });
+  }
+
+  return coreChatTablesReadyPromise;
+};
 
 const ensureConversationClearTables = async () => {
   if (clearTablesEnabled !== null) {
@@ -243,6 +416,7 @@ const listGroupChatsForUser = async (userId, executor = query) => {
 };
 
 const getChatStateForUser = async (userId, executor = query) => {
+  await ensureCoreChatTables();
   await ensureConversationClearTables();
   const [directChats, groupChats] = await Promise.all([
     listDirectChatsForUser(userId, executor),
@@ -346,6 +520,7 @@ const ensureReplyTarget = async ({
 };
 
 const sendDirectMessage = async (senderId, peerId, payload, executor = query) => {
+  await ensureCoreChatTables();
   const clearTablesEnabled = await ensureConversationClearTables();
   const conversation = await ensureDirectConversation(senderId, peerId, executor);
   const { content, replyToMessageId, storedContent } = serializeStoredMessageContent(payload);
@@ -407,6 +582,7 @@ const sendDirectMessage = async (senderId, peerId, payload, executor = query) =>
 };
 
 const markDirectConversationRead = async (userId, peerId, executor = query) => {
+  await ensureCoreChatTables();
   const participants = [userId, peerId].sort();
   const conversationKey = participants.join(":");
   const rows = await runQuery(
@@ -451,6 +627,7 @@ const markDirectConversationRead = async (userId, peerId, executor = query) => {
 };
 
 const createGroupChat = async (creatorUser, name, memberIds, executor = query) => {
+  await ensureCoreChatTables();
   if (!canCreateGroupChats(creatorUser?.personalityType)) {
     throw createHttpError("Your personality profile does not allow group chats.", 403);
   }
@@ -535,6 +712,7 @@ const createGroupChat = async (creatorUser, name, memberIds, executor = query) =
 };
 
 const sendGroupMessage = async (userId, groupId, payload, executor = query) => {
+  await ensureCoreChatTables();
   const clearTablesEnabled = await ensureConversationClearTables();
   const membershipRows = await runQuery(
     executor,
@@ -617,6 +795,7 @@ const sendGroupMessage = async (userId, groupId, payload, executor = query) => {
 };
 
 const markGroupChatRead = async (userId, groupId, executor = query) => {
+  await ensureCoreChatTables();
   const membershipRows = await runQuery(
     executor,
     `SELECT group_chat_id
@@ -660,6 +839,7 @@ const markGroupChatRead = async (userId, groupId, executor = query) => {
 };
 
 const deleteDirectConversationForUser = async (userId, peerId, executor = query) => {
+  await ensureCoreChatTables();
   const clearTablesEnabled = await ensureConversationClearTables();
   if (!clearTablesEnabled) {
     throw createHttpError("Conversation delete is unavailable right now.", 503);
@@ -696,6 +876,7 @@ const deleteDirectConversationForUser = async (userId, peerId, executor = query)
 };
 
 const deleteGroupConversationForUser = async (userId, groupId, executor = query) => {
+  await ensureCoreChatTables();
   const clearTablesEnabled = await ensureConversationClearTables();
   if (!clearTablesEnabled) {
     throw createHttpError("Conversation delete is unavailable right now.", 503);
