@@ -1,6 +1,5 @@
 import {
   getStoredSessionToken,
-  isApiOnlyMode,
   isApiUnavailableError,
   isRemoteAuthEnabled,
   requestIntroVibeApi,
@@ -14,7 +13,7 @@ const isRecoverableMatchesApiError = (error) =>
   isApiUnavailableError(error) || Number(error?.status) >= 500;
 
 export const shouldFallbackToLegacyMatches = (error) =>
-  isRemoteAuthEnabled() && !isApiOnlyMode() && isRecoverableMatchesApiError(error);
+  isRemoteAuthEnabled() && isRecoverableMatchesApiError(error);
 
 export const fetchRemoteMatches = async () => {
   const payload = await requestIntroVibeApi("/api/matches");

@@ -1,6 +1,5 @@
 import {
   getStoredSessionToken,
-  isApiOnlyMode,
   isApiUnavailableError,
   isRemoteAuthEnabled,
   requestIntroVibeApi,
@@ -56,7 +55,7 @@ const isRecoverableChatApiError = (error) =>
   isApiUnavailableError(error) || Number(error?.status) >= 500;
 
 export const shouldFallbackToLegacyChat = (error) =>
-  isRemoteAuthEnabled() && !isApiOnlyMode() && isRecoverableChatApiError(error);
+  isRemoteAuthEnabled() && isRecoverableChatApiError(error);
 
 export const fetchRemoteChatState = async () => requestIntroVibeApi("/api/chat/state");
 
