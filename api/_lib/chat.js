@@ -15,6 +15,87 @@ let coreChatTablesReadyPromise = null;
 let clearTablesReadyPromise = null;
 let clearTablesEnabled = null;
 
+const parseStoredMessageContent = (value) => {
+  const rawValue = typeof value === "string" ? value : "";
+  if (!rawValue) {
+    return {
+      content: "",
+      replyToMessageId: null,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue);
+    if (parsed?.__introVibeMessage !== MESSAGE_CONTENT_VERSION) {
+      throw new Error("Not an IntroVibe message envelope.");
+    }
+
+    return {
+      content: typeof parsed?.text === "string" ? parsed.text : "",
+      replyToMessageId:
+        typeof parsed?.replyToMessageId === "string" && parsed.replyToMessageId.trim()
+          ? parsed.replyToMessageId.trim()
+          : null,
+    };
+  } catch (error) {
+    return {
+      content: rawValue,
+      replyToMessageId: null,
+    };
+  }
+};
+
+const serializeStoredMessageContent = (payload = {}) => {
+  const content = (payload?.text || "").toString().trim();
+  const replyToMessageId =
+    typeof payload?.replyToMessageId === "string" && payload.replyToMessageId.trim()
+      ? payload.replyToMessageId.trim()
+      : null;
+
+  if (!replyToMessageId) {
+    return {
+      content,
+      replyToMessageId: null,
+      storedContent: content,
+    };
+  }
+
+  return {
+    content,
+    replyToMessageId,
+    storedContent: JSON.stringify({
+      __introVibeMessage: MESSAGE_CONTENT_VERSION,
+      text: content,
+      replyToMessageId,
+    }),
+  };
+};
+
+const mapMessages = (messageRows, readRows) => {
+  const readByMessage = readRows.reduce((accumulator, row) => {
+    if (!accumulator[row.message_id]) {
+      accumulator[row.message_id] = [];
+    }
+
+    accumulator[row.message_id].push(row.user_id);
+    return accumulator;
+  }, {});
+
+  return messageRows.map((row) => {
+    const normalizedContent = parseStoredMessageContent(row.content);
+
+    return {
+      id: row.id,
+      senderId: row.sender_id,
+      content: normalizedContent.content,
+      imageData: row.image_url || null,
+      timestamp: toTimestamp(row.created_at),
+      readBy: Array.from(new Set([row.sender_id, ...(readByMessage[row.id] || [])])),
+      replyToMessageId: normalizedContent.replyToMessageId,
+    };
+  });
+};
+
 const ensureCoreChatTables = async () => {
   if (!coreChatTablesReadyPromise) {
     coreChatTablesReadyPromise = (async () => {
