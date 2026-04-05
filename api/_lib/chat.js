@@ -32,13 +32,7 @@ const ensureCoreChatTables = async () => {
            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
            PRIMARY KEY (id),
            UNIQUE KEY uq_match_recommendations_pair (user_id, matched_user_id),
-           KEY idx_match_recommendations_user_status (user_id, status),
-           CONSTRAINT fk_match_recommendations_user
-             FOREIGN KEY (user_id) REFERENCES users (id)
-             ON DELETE CASCADE,
-           CONSTRAINT fk_match_recommendations_matched_user
-             FOREIGN KEY (matched_user_id) REFERENCES users (id)
-             ON DELETE CASCADE
+           KEY idx_match_recommendations_user_status (user_id, status)
          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
       );
       await runQuery(
@@ -55,13 +49,7 @@ const ensureCoreChatTables = async () => {
            PRIMARY KEY (id),
            UNIQUE KEY uq_direct_conversations_key (conversation_key),
            KEY idx_direct_conversations_user_one (user_one_id),
-           KEY idx_direct_conversations_user_two (user_two_id),
-           CONSTRAINT fk_direct_conversations_user_one
-             FOREIGN KEY (user_one_id) REFERENCES users (id)
-             ON DELETE CASCADE,
-           CONSTRAINT fk_direct_conversations_user_two
-             FOREIGN KEY (user_two_id) REFERENCES users (id)
-             ON DELETE CASCADE
+           KEY idx_direct_conversations_user_two (user_two_id)
          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
       );
       await runQuery(
@@ -79,13 +67,7 @@ const ensureCoreChatTables = async () => {
            deleted_at DATETIME NULL,
            PRIMARY KEY (id),
            KEY idx_direct_messages_conversation_created (conversation_id, created_at),
-           KEY idx_direct_messages_sender (sender_id),
-           CONSTRAINT fk_direct_messages_conversation
-             FOREIGN KEY (conversation_id) REFERENCES direct_conversations (id)
-             ON DELETE CASCADE,
-           CONSTRAINT fk_direct_messages_sender
-             FOREIGN KEY (sender_id) REFERENCES users (id)
-             ON DELETE CASCADE
+           KEY idx_direct_messages_sender (sender_id)
          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
       );
       await runQuery(
@@ -95,13 +77,7 @@ const ensureCoreChatTables = async () => {
            user_id CHAR(36) NOT NULL,
            read_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
            PRIMARY KEY (message_id, user_id),
-           KEY idx_direct_message_reads_user (user_id),
-           CONSTRAINT fk_direct_message_reads_message
-             FOREIGN KEY (message_id) REFERENCES direct_messages (id)
-             ON DELETE CASCADE,
-           CONSTRAINT fk_direct_message_reads_user
-             FOREIGN KEY (user_id) REFERENCES users (id)
-             ON DELETE CASCADE
+           KEY idx_direct_message_reads_user (user_id)
          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
       );
       await runQuery(
@@ -115,10 +91,7 @@ const ensureCoreChatTables = async () => {
            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
            last_message_at DATETIME NULL,
            PRIMARY KEY (id),
-           KEY idx_group_chats_created_by (created_by),
-           CONSTRAINT fk_group_chats_created_by
-             FOREIGN KEY (created_by) REFERENCES users (id)
-             ON DELETE CASCADE
+           KEY idx_group_chats_created_by (created_by)
          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
       );
       await runQuery(
@@ -130,13 +103,7 @@ const ensureCoreChatTables = async () => {
            is_muted TINYINT(1) NOT NULL DEFAULT 0,
            joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
            PRIMARY KEY (group_chat_id, user_id),
-           KEY idx_group_chat_members_user (user_id),
-           CONSTRAINT fk_group_chat_members_group
-             FOREIGN KEY (group_chat_id) REFERENCES group_chats (id)
-             ON DELETE CASCADE,
-           CONSTRAINT fk_group_chat_members_user
-             FOREIGN KEY (user_id) REFERENCES users (id)
-             ON DELETE CASCADE
+           KEY idx_group_chat_members_user (user_id)
          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
       );
       await runQuery(
@@ -153,13 +120,7 @@ const ensureCoreChatTables = async () => {
            deleted_at DATETIME NULL,
            PRIMARY KEY (id),
            KEY idx_group_messages_group_created (group_chat_id, created_at),
-           KEY idx_group_messages_sender (sender_id),
-           CONSTRAINT fk_group_messages_group
-             FOREIGN KEY (group_chat_id) REFERENCES group_chats (id)
-             ON DELETE CASCADE,
-           CONSTRAINT fk_group_messages_sender
-             FOREIGN KEY (sender_id) REFERENCES users (id)
-             ON DELETE CASCADE
+           KEY idx_group_messages_sender (sender_id)
          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
       );
       await runQuery(
@@ -169,13 +130,7 @@ const ensureCoreChatTables = async () => {
            user_id CHAR(36) NOT NULL,
            read_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
            PRIMARY KEY (message_id, user_id),
-           KEY idx_group_message_reads_user (user_id),
-           CONSTRAINT fk_group_message_reads_message
-             FOREIGN KEY (message_id) REFERENCES group_messages (id)
-             ON DELETE CASCADE,
-           CONSTRAINT fk_group_message_reads_user
-             FOREIGN KEY (user_id) REFERENCES users (id)
-             ON DELETE CASCADE
+           KEY idx_group_message_reads_user (user_id)
          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
       );
     })().catch((error) => {
@@ -202,13 +157,7 @@ const ensureConversationClearTables = async () => {
              user_id CHAR(36) NOT NULL,
              cleared_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
              PRIMARY KEY (conversation_id, user_id),
-             KEY idx_direct_conversation_clears_user (user_id),
-             CONSTRAINT fk_direct_conversation_clears_conversation
-               FOREIGN KEY (conversation_id) REFERENCES direct_conversations (id)
-               ON DELETE CASCADE,
-             CONSTRAINT fk_direct_conversation_clears_user
-               FOREIGN KEY (user_id) REFERENCES users (id)
-               ON DELETE CASCADE
+             KEY idx_direct_conversation_clears_user (user_id)
            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
         );
         await runQuery(
@@ -218,13 +167,7 @@ const ensureConversationClearTables = async () => {
              user_id CHAR(36) NOT NULL,
              cleared_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
              PRIMARY KEY (group_chat_id, user_id),
-             KEY idx_group_chat_clears_user (user_id),
-             CONSTRAINT fk_group_chat_clears_group
-               FOREIGN KEY (group_chat_id) REFERENCES group_chats (id)
-               ON DELETE CASCADE,
-             CONSTRAINT fk_group_chat_clears_user
-               FOREIGN KEY (user_id) REFERENCES users (id)
-               ON DELETE CASCADE
+             KEY idx_group_chat_clears_user (user_id)
            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
         );
         clearTablesEnabled = true;

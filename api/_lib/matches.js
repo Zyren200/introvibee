@@ -29,13 +29,7 @@ const ensureMatchRecommendationTable = async () => {
          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
          PRIMARY KEY (id),
          UNIQUE KEY uq_match_recommendations_pair (user_id, matched_user_id),
-         KEY idx_match_recommendations_user_status (user_id, status),
-         CONSTRAINT fk_match_recommendations_user
-           FOREIGN KEY (user_id) REFERENCES users (id)
-           ON DELETE CASCADE,
-         CONSTRAINT fk_match_recommendations_matched_user
-           FOREIGN KEY (matched_user_id) REFERENCES users (id)
-           ON DELETE CASCADE
+         KEY idx_match_recommendations_user_status (user_id, status)
        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
     ).catch((error) => {
       matchTablesReadyPromise = null;
