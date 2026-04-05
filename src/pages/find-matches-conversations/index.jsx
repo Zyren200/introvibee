@@ -11,8 +11,6 @@ import EmptyState from "./components/EmptyState";
 import { useIntroVibeAuth } from "../../introVibeAuth";
 import {
   createRemoteGroup,
-  deleteRemoteDirectConversation,
-  deleteRemoteGroupConversation,
   fetchRemoteChatState,
   getDirectChatKey,
   loadLegacyDirectChats,
@@ -44,6 +42,7 @@ const NO_MATCH_STATUS_MESSAGE =
   "Can't find a match right now. IntroVibe only shows people with the same personality type and shared interests.";
 const REMOTE_CHAT_REFRESH_MS = 5000;
 const MESSAGE_PREVIEW_MAX_LENGTH = 90;
+const HIDDEN_CONVERSATION_KEY = "introVibeHiddenConversations";
 
 const getMessagePreviewText = (message) => {
   const content = (message?.content || "").trim();
@@ -69,17 +68,46 @@ const formatSyncTime = (timestamp) => {
   });
 };
 
-const getConversationClearTimestamp = (conversation, userId) => {
-  if (!conversation || !userId) {
+const loadHiddenConversationState = () => {
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(HIDDEN_CONVERSATION_KEY);
+    return rawValue ? JSON.parse(rawValue) : {};
+  } catch (error) {
+    return {};
+  }
+};
+
+const getHiddenConversationTimestamp = (hiddenState, userId, conversationType, conversationId) => {
+  if (!hiddenState || !userId || !conversationType || !conversationId) {
     return 0;
   }
 
-  const rawValue = conversation?.clearedAtBy?.[userId];
+  const rawValue = hiddenState?.[userId]?.[conversationType]?.[conversationId];
   return typeof rawValue === "number" ? rawValue : Number(rawValue) || 0;
 };
 
-const isConversationHiddenForUser = (conversation, userId) => {
-  const clearedAt = getConversationClearTimestamp(conversation, userId);
+const getConversationClearTimestamp = (
+  conversation,
+  userId,
+  localHiddenTimestamp = 0
+) => {
+  if (!conversation || !userId) {
+    return localHiddenTimestamp;
+  }
+
+  const rawValue = conversation?.clearedAtBy?.[userId];
+  const conversationHiddenTimestamp =
+    typeof rawValue === "number" ? rawValue : Number(rawValue) || 0;
+
+  return Math.max(conversationHiddenTimestamp, localHiddenTimestamp);
+};
+
+const isConversationHiddenForUser = (conversation, userId, localHiddenTimestamp = 0) => {
+  const clearedAt = getConversationClearTimestamp(conversation, userId, localHiddenTimestamp);
   if (!clearedAt) {
     return false;
   }
@@ -128,6 +156,7 @@ const FindMatchesConversations = () => {
   const [replyTargetId, setReplyTargetId] = useState(null);
   const [isGroupComposerOpen, setIsGroupComposerOpen] = useState(false);
   const [groupMemberQuery, setGroupMemberQuery] = useState("");
+  const [hiddenConversations, setHiddenConversations] = useState(loadHiddenConversationState);
   const [conversationPendingDelete, setConversationPendingDelete] = useState(null);
   const [isDeletingConversation, setIsDeletingConversation] = useState(false);
 
@@ -163,6 +192,18 @@ const FindMatchesConversations = () => {
     if (chatMode !== 'legacy-local') return;
     persistLegacyGroupChats(groupChats);
   }, [chatMode, groupChats]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(HIDDEN_CONVERSATION_KEY, JSON.stringify(hiddenConversations));
+    } catch (error) {
+      console.error("Failed to save hidden conversations", error);
+    }
+  }, [hiddenConversations]);
 
   useEffect(() => {
     if (!authReady) {
@@ -322,10 +363,16 @@ const FindMatchesConversations = () => {
           const key = getDirectChatKey(currentUser?.id, peer.id);
           const conversation = directChats[key];
           const messages = conversation?.messages || [];
+          const hiddenTimestamp = getHiddenConversationTimestamp(
+            hiddenConversations,
+            currentUser?.id,
+            "direct",
+            peer.id
+          );
 
           if (
             messages.length === 0 ||
-            isConversationHiddenForUser(conversation, currentUser?.id)
+            isConversationHiddenForUser(conversation, currentUser?.id, hiddenTimestamp)
           ) {
             return null;
           }
@@ -354,7 +401,7 @@ const FindMatchesConversations = () => {
         })
         .filter(Boolean)
         .sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0)),
-    [peers, directChats, currentUser, isUserOnline]
+    [peers, directChats, currentUser, hiddenConversations, isUserOnline]
   );
 
   const joinedGroups = useMemo(
@@ -366,7 +413,14 @@ const FindMatchesConversations = () => {
     () =>
       joinedGroups
         .map((group) => {
-          if (isConversationHiddenForUser(group, currentUser?.id)) {
+          const hiddenTimestamp = getHiddenConversationTimestamp(
+            hiddenConversations,
+            currentUser?.id,
+            "group",
+            group.id
+          );
+
+          if (isConversationHiddenForUser(group, currentUser?.id, hiddenTimestamp)) {
             return null;
           }
 
@@ -395,7 +449,7 @@ const FindMatchesConversations = () => {
         })
         .filter(Boolean)
         .sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0)),
-    [joinedGroups, currentUser]
+    [joinedGroups, currentUser, hiddenConversations]
   );
 
   const selectedMatchPeer =
@@ -540,6 +594,55 @@ const FindMatchesConversations = () => {
     setChatMode('railway-api');
   };
 
+  const hideConversationFromInbox = (conversationType, conversationId) => {
+    if (!currentUser?.id || !conversationType || !conversationId) {
+      return;
+    }
+
+    setHiddenConversations((prev) => {
+      const userHiddenConversations = prev?.[currentUser.id] || {};
+      const nextConversationTypeState = {
+        ...(userHiddenConversations?.[conversationType] || {}),
+        [conversationId]: Date.now(),
+      };
+
+      return {
+        ...prev,
+        [currentUser.id]: {
+          ...userHiddenConversations,
+          [conversationType]: nextConversationTypeState,
+        },
+      };
+    });
+  };
+
+  const restoreConversationInInbox = (conversationType, conversationId) => {
+    if (!currentUser?.id || !conversationType || !conversationId) {
+      return;
+    }
+
+    setHiddenConversations((prev) => {
+      const userHiddenConversations = prev?.[currentUser.id] || {};
+      const nextConversationTypeState = {
+        ...(userHiddenConversations?.[conversationType] || {}),
+      };
+
+      if (!(conversationId in nextConversationTypeState)) {
+        return prev;
+      }
+
+      delete nextConversationTypeState[conversationId];
+
+      return {
+        ...prev,
+        [currentUser.id]: {
+          ...userHiddenConversations,
+          [conversationType]: nextConversationTypeState,
+        },
+      };
+    });
+  };
+
   const upsertLegacyDirectChat = (peerId, updater) => {
     setDirectChats((prev) => {
       const key = getDirectChatKey(currentUser?.id, peerId);
@@ -553,6 +656,7 @@ const FindMatchesConversations = () => {
 
   const addLegacyDirectMessage = (peerId, payload) => {
     const message = typeof payload === 'string' ? { text: payload } : payload;
+    restoreConversationInInbox("direct", peerId);
 
     upsertLegacyDirectChat(peerId, (existing) => ({
       ...existing,
@@ -579,6 +683,7 @@ const FindMatchesConversations = () => {
 
   const addLegacyGroupMessage = (groupId, payload) => {
     const message = typeof payload === 'string' ? { text: payload } : payload;
+    restoreConversationInInbox("group", groupId);
 
     setGroupChats((prev) =>
       prev.map((group) =>
@@ -761,6 +866,7 @@ const FindMatchesConversations = () => {
     setActiveTab('messages');
     setSelectedChat({ type: 'direct', id: peerId });
     setStatusMessage('');
+    restoreConversationInInbox("direct", peerId);
 
     const key = getDirectChatKey(currentUser?.id, peerId);
 
@@ -840,6 +946,7 @@ const FindMatchesConversations = () => {
   const handleSendMessage = async (payload) => {
     if (!selectedChat) return;
     setStatusMessage('');
+    restoreConversationInInbox(selectedChat.type, selectedChat.id);
     const nextPayload = replyTargetId
       ? { ...payload, replyToMessageId: replyTargetId }
       : payload;
@@ -1097,15 +1204,11 @@ const FindMatchesConversations = () => {
     setStatusMessage("");
 
     try {
-      if (chatMode === "railway-api") {
-        const payload = targetConversation.type === "direct"
-          ? await deleteRemoteDirectConversation(targetConversation.id)
-          : await deleteRemoteGroupConversation(targetConversation.id);
+      hideConversationFromInbox(targetConversation.type, targetConversation.id);
 
-        applyRemoteChatState(payload);
-      } else if (targetConversation.type === "direct") {
+      if (chatMode !== "railway-api" && targetConversation.type === "direct") {
         clearLegacyDirectConversation(targetConversation.id);
-      } else {
+      } else if (chatMode !== "railway-api") {
         clearLegacyGroupConversation(targetConversation.id);
       }
 
@@ -1124,12 +1227,6 @@ const FindMatchesConversations = () => {
           : `Removed ${targetConversation.name} from your inbox.`
       );
     } catch (error) {
-      if (shouldFallbackToLegacyChat(error)) {
-        fallbackToLegacyChat();
-        setConversationPendingDelete(null);
-        return;
-      }
-
       setStatusMessage(error.message || "Unable to delete this conversation right now.");
     } finally {
       setIsDeletingConversation(false);
