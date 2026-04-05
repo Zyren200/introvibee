@@ -2,6 +2,72 @@ import React, { useEffect, useState } from 'react';
 import Icon from '../../../components/AppIcon';
 import Button from '../../../components/ui/Button';
 
+const MAX_IMAGE_DATA_URL_LENGTH = 60000;
+const IMAGE_SIZE_STEPS = [1280, 1024, 860, 720, 600, 480, 360, 280];
+const IMAGE_QUALITY_STEPS = [0.84, 0.72, 0.6, 0.5, 0.4];
+
+const loadImageElement = (source) =>
+  new Promise((resolve, reject) => {
+    const image = new window.Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Unable to read this image.'));
+    image.src = source;
+  });
+
+const readFileAsDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => resolve(event?.target?.result || '');
+    reader.onerror = () => reject(new Error('Unable to read this file.'));
+    reader.readAsDataURL(file);
+  });
+
+const optimizeImageForChat = async (file) => {
+  const originalDataUrl = await readFileAsDataUrl(file);
+  if (originalDataUrl.length <= MAX_IMAGE_DATA_URL_LENGTH) {
+    return originalDataUrl;
+  }
+
+  const image = await loadImageElement(originalDataUrl);
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+
+  if (!context) {
+    throw new Error('Your browser could not prepare this image.');
+  }
+
+  let smallestCandidate = originalDataUrl;
+
+  for (const maxDimension of IMAGE_SIZE_STEPS) {
+    const ratio = Math.min(1, maxDimension / Math.max(image.width, image.height));
+    const width = Math.max(1, Math.round(image.width * ratio));
+    const height = Math.max(1, Math.round(image.height * ratio));
+
+    canvas.width = width;
+    canvas.height = height;
+
+    context.clearRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+
+    for (const quality of IMAGE_QUALITY_STEPS) {
+      const compressed = canvas.toDataURL('image/jpeg', quality);
+      if (compressed.length < smallestCandidate.length) {
+        smallestCandidate = compressed;
+      }
+
+      if (compressed.length <= MAX_IMAGE_DATA_URL_LENGTH) {
+        return compressed;
+      }
+    }
+  }
+
+  if (smallestCandidate.length <= MAX_IMAGE_DATA_URL_LENGTH) {
+    return smallestCandidate;
+  }
+
+  throw new Error('That photo is still too large after optimization. Please choose a smaller image.');
+};
+
 const MessageComposer = ({
   recipientName,
   onSend,
@@ -17,6 +83,8 @@ const MessageComposer = ({
   const [message, setMessage] = useState('');
   const [showPrompts, setShowPrompts] = useState(false);
   const [imageData, setImageData] = useState(null);
+  const [isPreparingImage, setIsPreparingImage] = useState(false);
+  const [imageStatus, setImageStatus] = useState('');
 
   const iceBreakers = [
     "What's your favorite way to unwind after classes?",
@@ -31,6 +99,7 @@ const MessageComposer = ({
       onSend({ text: message, imageData });
       setMessage('');
       setImageData(null);
+      setImageStatus('');
     }
   };
 
@@ -40,12 +109,24 @@ const MessageComposer = ({
     }
   };
 
-  const handleImageUpload = (event) => {
+  const handleImageUpload = async (event) => {
     const file = event?.target?.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => setImageData(e.target.result);
-    reader.readAsDataURL(file);
+
+    setIsPreparingImage(true);
+    setImageStatus('Preparing your photo for chat...');
+
+    try {
+      const optimizedImage = await optimizeImageForChat(file);
+      setImageData(optimizedImage);
+      setImageStatus('Photo ready to send.');
+    } catch (error) {
+      setImageData(null);
+      setImageStatus(error?.message || 'Unable to prepare this image.');
+    } finally {
+      setIsPreparingImage(false);
+      event.target.value = '';
+    }
   };
 
   useEffect(() => {
@@ -160,12 +241,31 @@ const MessageComposer = ({
           </div>
           <button
             type="button"
-            onClick={() => setImageData(null)}
+            onClick={() => {
+              setImageData(null);
+              setImageStatus('');
+            }}
             className="rounded-full p-2 text-muted-foreground transition-gentle hover:bg-muted hover:text-foreground"
-            disabled={disabled}
+            disabled={disabled || isPreparingImage}
           >
             <Icon name="X" size={16} color="currentColor" />
           </button>
+        </div>
+      )}
+
+      {imageStatus && (
+        <div className={`rounded-[1.2rem] border ${isPreparingImage ? 'border-accent/25 bg-accent/10' : 'border-border bg-background/65'} ${compact ? 'mb-3 px-3 py-2' : 'mb-4 px-4 py-3'}`}>
+          <div className="flex items-start gap-2">
+            <Icon
+              name={isPreparingImage ? 'LoaderCircle' : imageData ? 'BadgeCheck' : 'CircleAlert'}
+              size={16}
+              color={isPreparingImage ? 'var(--color-accent)' : imageData ? 'var(--color-success)' : 'var(--color-error)'}
+              className={isPreparingImage ? 'animate-spin' : ''}
+            />
+            <p className={`text-sm ${imageData ? 'text-foreground' : isPreparingImage ? 'text-accent' : 'text-error'}`}>
+              {imageStatus}
+            </p>
+          </div>
         </div>
       )}
 
@@ -176,7 +276,7 @@ const MessageComposer = ({
           }`}
         >
           <Icon name="Image" size={18} color="currentColor" />
-          <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={disabled} />
+          <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={disabled || isPreparingImage} />
         </label>
         <div
           className={`flex-1 border border-border bg-background/75 shadow-inner ${
@@ -188,10 +288,10 @@ const MessageComposer = ({
             onChange={(e) => setMessage(e?.target?.value)}
             placeholder="Type a message..."
             className={`w-full resize-none bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none ${
-              compact ? 'min-h-[44px] max-h-28 text-[15px]' : 'min-h-[52px] max-h-32 text-sm'
+              compact ? 'min-h-[44px] max-h-28 text-[15px] leading-6' : 'min-h-[52px] max-h-32 text-sm leading-6'
             }`}
             aria-label="Message content"
-            disabled={disabled}
+            disabled={disabled || isPreparingImage}
           />
         </div>
         <Button
@@ -199,7 +299,7 @@ const MessageComposer = ({
           size="icon"
           iconName="Send"
           onClick={handleSend}
-          disabled={disabled || (!message?.trim() && !imageData)}
+          disabled={disabled || isPreparingImage || (!message?.trim() && !imageData)}
           className={compact ? 'h-11 w-11 rounded-[1.1rem]' : 'h-12 w-12 rounded-full'}
         />
       </div>
@@ -210,7 +310,7 @@ const MessageComposer = ({
             <button
               type="button"
               onClick={handleSaveDraft}
-              disabled={disabled || (!message?.trim() && !imageData)}
+              disabled={disabled || isPreparingImage || (!message?.trim() && !imageData)}
               className="text-xs font-medium text-muted-foreground transition-gentle hover:text-foreground disabled:opacity-50"
             >
               Save draft
@@ -238,7 +338,7 @@ const MessageComposer = ({
                 iconName="Save"
                 iconPosition="left"
                 onClick={handleSaveDraft}
-                disabled={disabled || (!message?.trim() && !imageData)}
+                disabled={disabled || isPreparingImage || (!message?.trim() && !imageData)}
               >
                 Save draft
               </Button>

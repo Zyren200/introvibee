@@ -17,12 +17,15 @@ const ConversationThread = ({ conversation, onSelect, isActive }) => {
   return (
     <button
       onClick={() => onSelect(conversation?.id)}
-      className={`group w-full rounded-[1.35rem] border px-3 py-3 text-left transition-gentle ${
+      className={`group relative w-full overflow-hidden rounded-[1.35rem] border px-3 py-3 text-left transition-gentle ${
         isActive
           ? 'border-primary/35 bg-primary/12 shadow-gentle-sm'
           : 'border-transparent bg-card/45 hover:border-border hover:bg-card/80'
       }`}
     >
+      {isActive && (
+        <span className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-primary" aria-hidden="true" />
+      )}
       <div className="flex items-center gap-3">
         <div className="relative flex-shrink-0">
           <div className="h-12 w-12 overflow-hidden rounded-full ring-1 ring-border">
@@ -46,7 +49,7 @@ const ConversationThread = ({ conversation, onSelect, isActive }) => {
 
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-start justify-between gap-2">
-            <h4 className="truncate text-sm font-semibold text-foreground md:text-[15px]">
+            <h4 className="truncate pr-2 text-sm font-semibold text-foreground md:text-[15px]">
               {conversation?.name}
             </h4>
             <span className="shrink-0 text-xs text-muted-foreground">
@@ -55,7 +58,7 @@ const ConversationThread = ({ conversation, onSelect, isActive }) => {
           </div>
 
           <p
-            className={`line-clamp-1 text-sm ${
+            className={`line-clamp-2 text-sm leading-6 ${
               conversation?.unreadCount > 0
                 ? 'font-medium text-foreground'
                 : 'text-muted-foreground'
@@ -64,13 +67,18 @@ const ConversationThread = ({ conversation, onSelect, isActive }) => {
             {conversation?.lastMessage}
           </p>
 
-          <div className="mt-2 flex items-center gap-2 text-xs">
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
             <span className="rounded-full bg-muted px-2 py-1 text-muted-foreground">
               {conversation?.status === 'group' ? 'Group' : 'Direct'}
             </span>
             {conversation?.isDraft && (
               <span className="rounded-full bg-accent/15 px-2 py-1 text-accent">
                 Draft
+              </span>
+            )}
+            {conversation?.unreadCount > 0 && (
+              <span className="rounded-full bg-primary/12 px-2 py-1 font-medium text-primary">
+                {conversation?.unreadCount} unread
               </span>
             )}
             <span className="text-muted-foreground">{conversation?.messageCount} msgs</span>

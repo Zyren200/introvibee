@@ -75,17 +75,21 @@ const MessageBubble = ({ message, isOwn, onReply, isReplying = false }) => {
           )}
 
           {message?.content && (
-            <p className={`text-sm leading-relaxed md:text-[15px] ${isOwn ? 'text-primary-foreground' : 'text-foreground'}`}>
+            <p
+              className={`break-words whitespace-pre-wrap text-sm leading-7 [overflow-wrap:anywhere] md:text-[15px] ${
+                isOwn ? 'text-primary-foreground' : 'text-foreground'
+              }`}
+            >
               {message?.content}
             </p>
           )}
 
           {message?.imageData && (
-            <div className="mt-3">
+            <div className="mt-3 overflow-hidden rounded-2xl">
               <img
                 src={message?.imageData}
                 alt="Shared attachment"
-                className="max-h-64 rounded-2xl border border-border object-cover"
+                className="max-h-72 w-full rounded-2xl border border-border object-cover"
               />
             </div>
           )}

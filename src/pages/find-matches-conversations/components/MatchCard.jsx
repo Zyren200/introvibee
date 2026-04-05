@@ -15,7 +15,7 @@ const MatchCard = ({ match, onSendHello, onSaveLater }) => {
   };
 
   return (
-    <div className="rounded-[1.6rem] border border-border bg-card/78 p-4 shadow-gentle-sm transition-gentle hover:border-primary/30 hover:shadow-gentle">
+    <div className="rounded-[1.6rem] border border-border bg-card/78 p-4 shadow-gentle-sm transition-gentle hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-gentle">
       <div className="mb-4 flex items-start gap-3">
         <div className="relative flex-shrink-0">
           <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-primary/15 md:h-[4.5rem] md:w-[4.5rem]">
@@ -39,6 +39,10 @@ const MatchCard = ({ match, onSendHello, onSaveLater }) => {
         </div>
 
         <div className="min-w-0 flex-1">
+          <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-secondary/12 px-2.5 py-1">
+            <Icon name="HeartHandshake" size={13} color="var(--color-secondary-foreground)" />
+            <span className="caption text-secondary-foreground">Instant connection</span>
+          </div>
           <div className="mb-2 flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
               <h3 className="mb-1 truncate font-heading text-base font-semibold text-foreground md:text-lg">
@@ -134,7 +138,7 @@ const MatchCard = ({ match, onSendHello, onSaveLater }) => {
 
       {match?.bio && (
         <div className="mb-4 rounded-2xl bg-muted/55 p-3">
-          <p className="line-clamp-3 text-sm leading-relaxed text-foreground">
+          <p className="line-clamp-3 text-sm leading-7 text-foreground">
             {match?.bio}
           </p>
         </div>
@@ -148,16 +152,16 @@ const MatchCard = ({ match, onSendHello, onSaveLater }) => {
           onClick={() => onSendHello?.(match?.id)}
           className="flex-1 rounded-full"
         >
-          Start 1-on-1 chat
+          Chat now
         </Button>
         <Button
           variant="outline"
-          iconName={isSaved ? 'BookmarkCheck' : 'Bookmark'}
+          iconName={isSaved ? 'BookmarkCheck' : 'UserPlus'}
           iconPosition="left"
           onClick={handleSave}
           className="rounded-full"
         >
-          {isSaved ? 'Saved' : 'Save profile'}
+          {isSaved ? 'Connection saved' : 'Save connection'}
         </Button>
       </div>
     </div>

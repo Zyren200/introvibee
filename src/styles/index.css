@@ -9,7 +9,7 @@ body {
 
 * {
   box-sizing: border-box;
-  line-height: normal;
+  line-height: inherit;
   font-family: inherit;
   margin: unset;
 }

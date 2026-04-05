@@ -95,6 +95,8 @@ const FindMatchesConversations = () => {
   const [isLoadingMatches, setIsLoadingMatches] = useState(true);
   const [lastMatchesSyncAt, setLastMatchesSyncAt] = useState(null);
   const [replyTargetId, setReplyTargetId] = useState(null);
+  const [isGroupComposerOpen, setIsGroupComposerOpen] = useState(false);
+  const [groupMemberQuery, setGroupMemberQuery] = useState("");
 
   const personalityType = currentUser?.personalityType;
   const personalityMeta = PERSONALITY_META[personalityType];
@@ -468,6 +470,27 @@ const FindMatchesConversations = () => {
     }
   }, [replyTargetId, selectedMessagesLookup]);
 
+  useEffect(() => {
+    if (!isGroupComposerOpen) {
+      return undefined;
+    }
+
+    const originalOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        closeGroupComposer();
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isGroupComposerOpen]);
+
   const applyRemoteChatState = (payload) => {
     setDirectChats(payload?.directChats || {});
     setGroupChats(payload?.groupChats || []);
@@ -786,6 +809,8 @@ const FindMatchesConversations = () => {
         applyRemoteChatState(payload);
         setGroupName('');
         setSelectedGroupMembers([]);
+        setGroupMemberQuery("");
+        setIsGroupComposerOpen(false);
         setStatusMessage('Group chat created.');
         setSelectedChat({ type: 'group', id: payload?.groupId });
         setActiveTab('messages');
@@ -821,6 +846,8 @@ const FindMatchesConversations = () => {
     setGroupChats((prev) => [newGroup, ...prev]);
     setGroupName('');
     setSelectedGroupMembers([]);
+    setGroupMemberQuery("");
+    setIsGroupComposerOpen(false);
     setStatusMessage('Group chat created.');
     setSelectedChat({ type: 'group', id: newGroup.id });
     setActiveTab('messages');
@@ -832,6 +859,15 @@ const FindMatchesConversations = () => {
         ? prev.filter((entry) => entry !== memberId)
         : [...prev, memberId]
     );
+  };
+
+  const openGroupComposer = () => {
+    setIsGroupComposerOpen(true);
+  };
+
+  const closeGroupComposer = () => {
+    setIsGroupComposerOpen(false);
+    setGroupMemberQuery("");
   };
 
   const handleRefreshMatches = async ({
@@ -966,7 +1002,7 @@ const FindMatchesConversations = () => {
   }, [matchQuery, matchResults]);
 
   const filteredAvailableGroupMembers = useMemo(() => {
-    const query = matchQuery.trim().toLowerCase();
+    const query = groupMemberQuery.trim().toLowerCase();
     if (!query) return availableGroupMembers;
 
     return availableGroupMembers.filter((member) => {
@@ -974,7 +1010,7 @@ const FindMatchesConversations = () => {
       const personality = (member?.personalityType || "").toLowerCase();
       return name.includes(query) || personality.includes(query);
     });
-  }, [availableGroupMembers, matchQuery]);
+  }, [availableGroupMembers, groupMemberQuery]);
 
   const latestSyncAt = lastMatchesSyncAt || lastUsersSyncAt;
   const syncLabel = latestSyncAt
@@ -1005,6 +1041,13 @@ const FindMatchesConversations = () => {
         preview: getMessagePreviewText(replyTarget),
       }
     : null;
+  const selectedGroupMemberLabels = selectedGroupMembers
+    .map((memberId) => {
+      const member = availableGroupMembers.find((entry) => entry.id === memberId);
+      return member ? { id: member.id, name: member.name } : null;
+    })
+    .filter(Boolean);
+  const featuredMatch = filteredMatchResults[0] || matchResults[0] || null;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,color-mix(in_oklab,var(--color-primary)_14%,transparent),transparent_30%),linear-gradient(180deg,var(--color-background),color-mix(in_oklab,var(--color-background)_88%,var(--color-secondary)_12%))]">
@@ -1145,7 +1188,7 @@ const FindMatchesConversations = () => {
 
                   <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
                     {suggestedStarter && (
-                      <div className="rounded-[1.6rem] border border-primary/15 bg-primary/8 p-4 shadow-gentle-sm">
+                      <div className="rounded-[1.6rem] border border-primary/15 bg-primary/[0.08] p-4 shadow-gentle-sm">
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="text-xs uppercase tracking-[0.16em] text-primary/80">Suggested chat</p>
@@ -1547,64 +1590,75 @@ const FindMatchesConversations = () => {
                   </div>
                 </div>
 
+                <div className="rounded-[1.75rem] border border-border bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-card)_94%,var(--color-primary)_6%),color-mix(in_oklab,var(--color-card)_88%,var(--color-background)_12%))] p-4 shadow-gentle-sm">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Ready to connect</p>
+                      <h3 className="mt-1 text-xl font-heading font-semibold text-foreground">
+                        {matchResults.length} people match your vibe
+                      </h3>
+                    </div>
+                    <div className="rounded-full bg-primary/12 px-3 py-1 text-xs font-medium text-primary">
+                      Live suggestions
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Your matches appear here right away. You can chat instantly or save the connection for later.
+                  </p>
+                  {featuredMatch && (
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="default"
+                        iconName="MessageCircle"
+                        className="rounded-full"
+                        onClick={() => handleStartDirectChat(featuredMatch.id)}
+                      >
+                        Chat with {featuredMatch.name}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        iconName="RefreshCw"
+                        className="rounded-full"
+                        onClick={handleRefreshMatches}
+                        disabled={!authReady}
+                      >
+                        Refresh list
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
                 {groupChatEnabled && (
                   <div className="rounded-[1.75rem] border border-border bg-card/80 p-4 shadow-gentle-sm">
                     <div className="mb-3 flex items-center gap-2">
                       <Icon name="UsersRound" size={18} color="var(--color-accent)" />
                       <h3 className="text-lg font-heading font-semibold text-foreground">Create group chat</h3>
                     </div>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Pick at least two matches to open one shared thread.
+                    <p className="text-sm text-muted-foreground">
+                      Keep the interface clean, then open a focused selector only when you want to build a group.
                     </p>
 
-                    <input
-                      type="text"
-                      value={groupName}
-                      onChange={(event) => setGroupName(event.target.value)}
-                      placeholder="Group name"
-                      className="mb-4 flex h-11 w-full rounded-2xl border border-input bg-background px-4 py-2 text-sm text-foreground"
-                    />
-
-                    <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
-                      {filteredAvailableGroupMembers.length > 0 ? (
-                        filteredAvailableGroupMembers.map((member) => (
-                          <button
-                            key={member.id}
-                            type="button"
-                            onClick={() => toggleGroupMember(member.id)}
-                            className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-gentle ${
-                              selectedGroupMembers.includes(member.id)
-                                ? "border-primary/40 bg-primary/5"
-                                : "border-border bg-background hover:border-primary/30"
-                            }`}
-                          >
-                            <div>
-                              <p className="font-medium text-foreground">{member.name}</p>
-                              <p className="text-sm text-muted-foreground">{member.personalityType}</p>
-                            </div>
-                            <Icon
-                              name={selectedGroupMembers.includes(member.id) ? "CheckCircle" : "Circle"}
-                              size={18}
-                              color={selectedGroupMembers.includes(member.id) ? "var(--color-primary)" : "var(--color-muted-foreground)"}
-                            />
-                          </button>
-                        ))
-                      ) : (
-                        <p className="rounded-2xl border border-dashed border-border bg-background/70 p-4 text-sm text-muted-foreground">
-                          No eligible members yet. Matching works best after more users complete their personality test.
+                    <div className="mt-4 flex items-center justify-between rounded-[1.4rem] border border-border bg-background/70 px-4 py-3">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {availableGroupMembers.length > 1
+                            ? `${availableGroupMembers.length} matches are ready`
+                            : "Need at least two matches"}
                         </p>
-                      )}
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Choose people only after you tap the create button.
+                        </p>
+                      </div>
+                      <Button
+                        variant="default"
+                        iconName="UsersRound"
+                        onClick={openGroupComposer}
+                        disabled={isLoadingChats || availableGroupMembers.length < 2}
+                        className="rounded-full"
+                      >
+                        Create group chat
+                      </Button>
                     </div>
-
-                    <Button
-                      variant="default"
-                      iconName="UsersRound"
-                      onClick={handleCreateGroup}
-                      disabled={isLoadingChats}
-                      className="mt-4 w-full rounded-full"
-                    >
-                      Create group
-                    </Button>
                   </div>
                 )}
 
@@ -1622,7 +1676,7 @@ const FindMatchesConversations = () => {
                           key={match.id}
                           match={match}
                           onSendHello={handleStartDirectChat}
-                          onSaveLater={() => setStatusMessage(`Saved ${match.name}'s profile.`)}
+                          onSaveLater={() => setStatusMessage(`Saved your connection with ${match.name}.`)}
                         />
                       ))}
                     </div>
@@ -1638,6 +1692,154 @@ const FindMatchesConversations = () => {
             </aside>
           </div>
         </div>
+
+        {groupChatEnabled && isGroupComposerOpen && (
+          <div
+            className="fixed inset-0 z-[220] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm"
+            onClick={closeGroupComposer}
+          >
+            <div
+              className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border border-border bg-card shadow-[0_28px_80px_rgba(40,24,29,0.28)]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="border-b border-border bg-[linear-gradient(180deg,color-mix(in_oklab,var(--color-card)_92%,var(--color-primary)_8%),var(--color-card))] px-5 py-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Group setup</p>
+                    <h3 className="mt-1 text-2xl font-heading font-semibold text-foreground">Create group chat</h3>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Pick matched people only after opening this panel so the main interface stays clean.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeGroupComposer}
+                    className="rounded-full p-2 text-muted-foreground transition-gentle hover:bg-muted hover:text-foreground"
+                    aria-label="Close group creator"
+                  >
+                    <Icon name="X" size={18} color="currentColor" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-5 py-5">
+                <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-foreground">Group name</label>
+                    <input
+                      type="text"
+                      value={groupName}
+                      onChange={(event) => setGroupName(event.target.value)}
+                      placeholder="Example: Weekend study circle"
+                      className="flex h-12 w-full rounded-[1.25rem] border border-input bg-background px-4 py-2 text-sm text-foreground outline-none transition-gentle focus:border-primary/40"
+                    />
+
+                    <div className="mt-4 rounded-[1.4rem] border border-border bg-background/70 px-4 py-3">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Icon name="Search" size={16} color="currentColor" />
+                        <input
+                          type="text"
+                          value={groupMemberQuery}
+                          onChange={(event) => setGroupMemberQuery(event.target.value)}
+                          placeholder="Search matched people"
+                          className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 space-y-2">
+                      {filteredAvailableGroupMembers.length > 0 ? (
+                        filteredAvailableGroupMembers.map((member) => (
+                          <button
+                            key={member.id}
+                            type="button"
+                            onClick={() => toggleGroupMember(member.id)}
+                            className={`flex w-full items-center justify-between rounded-[1.35rem] border px-4 py-3 text-left transition-gentle ${
+                              selectedGroupMembers.includes(member.id)
+                                ? "border-primary/40 bg-primary/[0.07] shadow-gentle-sm"
+                                : "border-border bg-card hover:border-primary/25 hover:bg-background/80"
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-foreground">{member.name}</p>
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                {member.personalityType} | {member.sharedInterests?.slice(0, 2).join(", ") || "Shared interests"}
+                              </p>
+                            </div>
+                            <Icon
+                              name={selectedGroupMembers.includes(member.id) ? "CheckCircle2" : "Circle"}
+                              size={20}
+                              color={selectedGroupMembers.includes(member.id) ? "var(--color-primary)" : "var(--color-muted-foreground)"}
+                            />
+                          </button>
+                        ))
+                      ) : (
+                        <div className="rounded-[1.4rem] border border-dashed border-border bg-background/75 p-4 text-sm text-muted-foreground">
+                          No matched people are available for this search yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[1.5rem] border border-border bg-background/72 p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Selected members</p>
+                    <p className="mt-2 text-2xl font-semibold text-foreground">{selectedGroupMembers.length}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Select at least two matched people to create the conversation.
+                    </p>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {selectedGroupMemberLabels.length > 0 ? (
+                        selectedGroupMemberLabels.map((member) => (
+                          <button
+                            key={member.id}
+                            type="button"
+                            onClick={() => toggleGroupMember(member.id)}
+                            className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-gentle hover:bg-primary/20"
+                          >
+                            <span>{member.name}</span>
+                            <Icon name="X" size={12} color="currentColor" />
+                          </button>
+                        ))
+                      ) : (
+                        <span className="text-sm text-muted-foreground">No one selected yet.</span>
+                      )}
+                    </div>
+
+                    <div className="mt-5 rounded-[1.2rem] border border-accent/25 bg-accent/10 px-3 py-3">
+                      <p className="text-xs font-medium uppercase tracking-[0.12em] text-accent">Quick guide</p>
+                      <p className="mt-2 text-sm text-foreground">
+                        Name the chat, pick your members, then create the group in one step.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-border bg-card/95 px-5 py-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    Matches stay hidden until you open this creator, then you can select exactly who to add.
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button variant="outline" onClick={closeGroupComposer} className="rounded-full">
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="default"
+                      iconName="UsersRound"
+                      onClick={handleCreateGroup}
+                      disabled={isLoadingChats}
+                      className="rounded-full"
+                    >
+                      Create group chat
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
