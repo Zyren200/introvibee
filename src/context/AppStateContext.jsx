@@ -3,7 +3,7 @@ import { useIntroVibeAuth } from '../introVibeAuth';
 import {
   getStoredSessionToken,
   isApiOnlyMode,
-  isApiUnavailableError,
+  isRecoverableApiError,
   isRemoteAuthEnabled,
   requestIntroVibeApi,
 } from '../lib/introVibeApi';
@@ -89,7 +89,7 @@ export const AppStateProvider = ({ children }) => {
       } catch (error) {
         if (cancelled) return;
 
-        if (isRemoteAuthEnabled() && !isApiOnlyMode() && isApiUnavailableError(error)) {
+        if (isRemoteAuthEnabled() && !isApiOnlyMode() && isRecoverableApiError(error)) {
           setStats(loadLegacyStats());
           setQuietState(loadLegacyQuietState());
           setStorageMode('legacy-local');
@@ -143,7 +143,7 @@ export const AppStateProvider = ({ children }) => {
           setQuietState(nextQuietState);
         }
       } catch (error) {
-        if (isRemoteAuthEnabled() && !isApiOnlyMode() && isApiUnavailableError(error)) {
+        if (isRemoteAuthEnabled() && !isApiOnlyMode() && isRecoverableApiError(error)) {
           setStorageMode('legacy-local');
           persistLegacyStats(stats);
           persistLegacyQuietState(quietState);

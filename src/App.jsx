@@ -5,7 +5,7 @@ import { IntroVibeAuthProvider, useIntroVibeAuth } from "./introVibeAuth";
 import {
   getStoredSessionToken,
   isApiOnlyMode,
-  isApiUnavailableError,
+  isRecoverableApiError,
   isRemoteAuthEnabled,
   requestIntroVibeApi,
 } from "./lib/introVibeApi";
@@ -34,7 +34,7 @@ const AppContent = () => {
           }
           return;
         } catch (error) {
-          if (!(isRemoteAuthEnabled() && !isApiOnlyMode() && isApiUnavailableError(error))) {
+          if (!(isRemoteAuthEnabled() && !isApiOnlyMode() && isRecoverableApiError(error))) {
             if (!cancelled) {
               applyThemeMode("light");
             }

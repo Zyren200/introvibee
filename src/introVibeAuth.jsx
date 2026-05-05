@@ -3,7 +3,7 @@ import {
   clearStoredSessionToken,
   getStoredSessionToken,
   isApiOnlyMode,
-  isApiUnavailableError,
+  isRecoverableApiError,
   isRemoteAuthEnabled,
   requestIntroVibeApi,
   setStoredSessionToken,
@@ -356,7 +356,7 @@ export const IntroVibeAuthProvider = ({ children }) => {
 
         clearStoredSessionToken();
 
-        if (isApiOnlyMode() || !isApiUnavailableError(remoteError)) {
+        if (isApiOnlyMode() || !isRecoverableApiError(remoteError)) {
           setUsers([]);
           setCurrentUserId(null);
           setSessionAuthenticated(false);
@@ -559,7 +559,7 @@ export const IntroVibeAuthProvider = ({ children }) => {
   };
 
   const shouldFallbackToLegacy = (apiError) =>
-    isRemoteAuthEnabled() && !isApiOnlyMode() && isApiUnavailableError(apiError);
+    isRemoteAuthEnabled() && !isApiOnlyMode() && isRecoverableApiError(apiError);
 
   const localSignUp = ({ username, email, password, interests = [], tags = [], avatarId = 1 }) => {
     const trimmedUsername = username?.trim();

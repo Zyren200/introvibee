@@ -54,6 +54,8 @@ export const clearStoredSessionToken = () => {
 };
 
 export const isApiUnavailableError = (error) => error?.code === "API_UNAVAILABLE";
+export const isRecoverableApiError = (error) =>
+  isApiUnavailableError(error) || Number(error?.status) >= 500;
 
 export const requestIntroVibeApi = async (path, options = {}) => {
   const headers = new Headers(options.headers || {});

@@ -60,6 +60,16 @@ const createHttpError = (message, statusCode) => {
   return error;
 };
 
+const DB_UNAVAILABLE_ERROR_CODES = new Set([
+  "DB_CONFIG_ERROR",
+  "ECONNREFUSED",
+  "ENOTFOUND",
+  "ETIMEDOUT",
+  "EHOSTUNREACH",
+  "EAI_AGAIN",
+  "PROTOCOL_CONNECTION_LOST",
+]);
+
 const readBearerToken = (req) => {
   const authorizationHeader = req.headers.authorization || req.headers.Authorization;
 
@@ -74,8 +84,14 @@ const readBearerToken = (req) => {
 const handleApiError = (res, error) => {
   console.error(error);
 
-  const statusCode = error?.statusCode || 500;
-  const message = statusCode >= 500 ? "Internal server error." : error.message;
+  const isDatabaseUnavailable = DB_UNAVAILABLE_ERROR_CODES.has(error?.code);
+  const statusCode = error?.statusCode || (isDatabaseUnavailable ? 503 : 500);
+  const message =
+    statusCode >= 500
+      ? isDatabaseUnavailable
+        ? "IntroVibe database is unavailable. Check the Railway MySQL connection and try again."
+        : "Internal server error."
+      : error.message;
   sendJson(res, statusCode, { error: message });
 };
 

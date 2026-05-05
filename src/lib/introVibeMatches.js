@@ -1,6 +1,6 @@
 import {
   getStoredSessionToken,
-  isApiUnavailableError,
+  isRecoverableApiError,
   isRemoteAuthEnabled,
   requestIntroVibeApi,
 } from "./introVibeApi";
@@ -9,11 +9,8 @@ export const shouldUseRemoteMatches = (authMode, currentUserId) =>
   Boolean(currentUserId) &&
   (authMode === "railway-api" || (isRemoteAuthEnabled() && getStoredSessionToken()));
 
-const isRecoverableMatchesApiError = (error) =>
-  isApiUnavailableError(error) || Number(error?.status) >= 500;
-
 export const shouldFallbackToLegacyMatches = (error) =>
-  isRemoteAuthEnabled() && isRecoverableMatchesApiError(error);
+  isRemoteAuthEnabled() && isRecoverableApiError(error);
 
 export const fetchRemoteMatches = async () => {
   const payload = await requestIntroVibeApi("/api/matches");

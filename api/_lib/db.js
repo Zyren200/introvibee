@@ -1,4 +1,5 @@
 const mysql = require("mysql2/promise");
+const { URL } = require("url");
 
 let pool;
 
@@ -14,6 +15,9 @@ const parseNumber = (value, fallback) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const shouldUseSsl = () =>
+  process.env.MYSQL_SSL === "true" || process.env.RAILWAY_MYSQL_SSL === "true";
+
 const buildConnectionConfig = () => {
   const connectionUri =
     process.env.DATABASE_URL ||
@@ -23,7 +27,16 @@ const buildConnectionConfig = () => {
     "";
 
   if (connectionUri) {
-    return connectionUri;
+    const parsedUri = new URL(connectionUri);
+
+    return {
+      host: parsedUri.hostname,
+      port: parseNumber(parsedUri.port, 3306),
+      user: decodeURIComponent(parsedUri.username),
+      password: decodeURIComponent(parsedUri.password),
+      database: parsedUri.pathname.replace(/^\//, ""),
+      ssl: shouldUseSsl() ? { rejectUnauthorized: false } : undefined,
+    };
   }
 
   const host = process.env.MYSQLHOST || process.env.RAILWAY_MYSQL_HOST || process.env.DB_HOST;
@@ -49,27 +62,19 @@ const buildConnectionConfig = () => {
     user,
     password,
     database,
-    ssl:
-      process.env.MYSQL_SSL === "true" || process.env.RAILWAY_MYSQL_SSL === "true"
-        ? { rejectUnauthorized: false }
-        : undefined,
+    ssl: shouldUseSsl() ? { rejectUnauthorized: false } : undefined,
   };
 };
 
 const getPool = () => {
   if (!pool) {
     const connectionConfig = buildConnectionConfig();
-
-    if (typeof connectionConfig === "string") {
-      pool = mysql.createPool(connectionConfig);
-    } else {
-      pool = mysql.createPool({
-        ...connectionConfig,
-        waitForConnections: true,
-        connectionLimit: parseNumber(process.env.MYSQL_CONNECTION_LIMIT, 10),
-        queueLimit: 0,
-      });
-    }
+    pool = mysql.createPool({
+      ...connectionConfig,
+      waitForConnections: true,
+      connectionLimit: parseNumber(process.env.MYSQL_CONNECTION_LIMIT, 10),
+      queueLimit: 0,
+    });
   }
 
   return pool;

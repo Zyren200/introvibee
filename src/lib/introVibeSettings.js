@@ -1,7 +1,7 @@
 import {
   getStoredSessionToken,
   isApiOnlyMode,
-  isApiUnavailableError,
+  isRecoverableApiError,
   isRemoteAuthEnabled,
   requestIntroVibeApi,
 } from "./introVibeApi";
@@ -116,7 +116,7 @@ export const shouldUseRemoteSettings = (authMode, currentUserId) =>
   (authMode === "railway-api" || (isRemoteAuthEnabled() && getStoredSessionToken()));
 
 export const shouldFallbackToLegacySettings = (error) =>
-  isRemoteAuthEnabled() && !isApiOnlyMode() && isApiUnavailableError(error);
+  isRemoteAuthEnabled() && !isApiOnlyMode() && isRecoverableApiError(error);
 
 export const fetchRemoteSettings = async () => {
   const payload = await requestIntroVibeApi("/api/settings");

@@ -8,7 +8,7 @@ import { useIntroVibeAuth } from "../../introVibeAuth";
 import {
   getStoredSessionToken,
   isApiOnlyMode,
-  isApiUnavailableError,
+  isRecoverableApiError,
   isRemoteAuthEnabled,
   requestIntroVibeApi,
 } from "../../lib/introVibeApi";
@@ -62,7 +62,7 @@ const shouldUseRemoteSudoku = (authMode, currentUserId) =>
   Boolean(currentUserId) && (authMode === "railway-api" || (isRemoteAuthEnabled() && getStoredSessionToken()));
 
 const shouldFallbackToLegacySudoku = (error) =>
-  isRemoteAuthEnabled() && !isApiOnlyMode() && isApiUnavailableError(error);
+  isRemoteAuthEnabled() && !isApiOnlyMode() && isRecoverableApiError(error);
 
 const SudokuPuzzle = () => {
   const navigate = useNavigate();
