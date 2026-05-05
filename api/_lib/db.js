@@ -3,6 +3,16 @@ const { URL } = require("url");
 
 let pool;
 
+const RECOVERABLE_CONNECTION_ERROR_CODES = new Set([
+  "PROTOCOL_CONNECTION_LOST",
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "EHOSTUNREACH",
+  "EPIPE",
+  "PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR",
+]);
+
 const createConfigError = (message) => {
   const error = new Error(message);
   error.statusCode = 503;
@@ -14,6 +24,9 @@ const parseNumber = (value, fallback) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
+
+const isRecoverableConnectionError = (error) =>
+  RECOVERABLE_CONNECTION_ERROR_CODES.has(error?.code);
 
 const shouldUseSsl = () =>
   process.env.MYSQL_SSL === "true" || process.env.RAILWAY_MYSQL_SSL === "true";
@@ -73,6 +86,11 @@ const getPool = () => {
       ...connectionConfig,
       waitForConnections: true,
       connectionLimit: parseNumber(process.env.MYSQL_CONNECTION_LIMIT, 10),
+      maxIdle: parseNumber(process.env.MYSQL_MAX_IDLE, 10),
+      idleTimeout: parseNumber(process.env.MYSQL_IDLE_TIMEOUT_MS, 60000),
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 0,
+      connectTimeout: parseNumber(process.env.MYSQL_CONNECT_TIMEOUT_MS, 10000),
       queueLimit: 0,
     });
   }
@@ -80,13 +98,60 @@ const getPool = () => {
   return pool;
 };
 
-const query = async (sql, params = []) => {
-  const [rows] = await getPool().execute(sql, params);
-  return rows;
+const resetPool = async () => {
+  if (!pool) {
+    return;
+  }
+
+  const currentPool = pool;
+  pool = null;
+
+  try {
+    await currentPool.end();
+  } catch (error) {
+    // Ignore close errors while rebuilding the pool after fatal socket issues.
+  }
 };
 
-const withTransaction = async (callback) => {
-  const connection = await getPool().getConnection();
+const getValidatedConnection = async (attempt = 0) => {
+  let connection;
+
+  try {
+    connection = await getPool().getConnection();
+    await connection.ping();
+    return connection;
+  } catch (error) {
+    if (connection) {
+      try {
+        connection.destroy();
+      } catch (destroyError) {
+        // Ignore destroy errors while recovering the connection.
+      }
+    }
+
+    if (isRecoverableConnectionError(error) && attempt === 0) {
+      await resetPool();
+      return getValidatedConnection(attempt + 1);
+    }
+
+    throw error;
+  }
+};
+
+const query = async (sql, params = []) => {
+  const connection = await getValidatedConnection();
+
+  try {
+    const [rows] = await connection.execute(sql, params);
+    return rows;
+  } finally {
+    connection.release();
+  }
+};
+
+const withTransaction = async (callback, attempt = 0) => {
+  const connection = await getValidatedConnection(attempt);
+  let shouldRelease = true;
 
   try {
     await connection.beginTransaction();
@@ -94,10 +159,30 @@ const withTransaction = async (callback) => {
     await connection.commit();
     return result;
   } catch (error) {
-    await connection.rollback();
+    try {
+      await connection.rollback();
+    } catch (rollbackError) {
+      if (!isRecoverableConnectionError(rollbackError)) {
+        throw rollbackError;
+      }
+    }
+
+    if (isRecoverableConnectionError(error) && attempt === 0) {
+      shouldRelease = false;
+      try {
+        connection.destroy();
+      } catch (destroyError) {
+        // Ignore destroy errors while rebuilding the pool.
+      }
+      await resetPool();
+      return withTransaction(callback, attempt + 1);
+    }
+
     throw error;
   } finally {
-    connection.release();
+    if (shouldRelease) {
+      connection.release();
+    }
   }
 };
 
